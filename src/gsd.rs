@@ -308,7 +308,7 @@ pub struct Symbol {
     #[facet(xml::attribute, rename = "uuid")]
     uuid: Uuid,
     #[facet(xml::attribute, rename = "symdef", default = "")]
-    symdef: String,
+    symdef: Uuid,
 
     // FIXME: Find a way to serialize the Matrix directly using facet.
     #[facet(rename = "Matrix")]
@@ -320,8 +320,8 @@ impl Symbol {
         self.uuid
     }
 
-    pub fn symdef(&self) -> &str {
-        &self.symdef
+    pub fn symdef(&self) -> Uuid {
+        self.symdef
     }
 
     pub fn matrix(&self) -> Option<Matrix> {
@@ -329,7 +329,7 @@ impl Symbol {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, facet::Facet)]
 pub struct Matrix {
     u1: f64,
     u2: f64,
@@ -418,53 +418,248 @@ impl fmt::Display for Matrix {
 mod tests {
     use std::str::FromStr;
 
-    use facet_assert::assert_same;
-
     use super::*;
+    use crate::MvrFile;
+
+    fn expected_gsd() -> GeneralSceneDescription {
+        GeneralSceneDescription {
+            ver_major: 1,
+            ver_minor: 5,
+            provider: "Provider".to_string(),
+            provider_version: "Provider Version".to_string(),
+            user_data: Some(UserData {
+                data: vec![
+                    xml::RawMarkup::from(r#"<Data provider="Data Provider 1" ver="0.1" />"#),
+                    xml::RawMarkup::from(
+                        r#"<Data provider="Data Provider 2"><VWEntry key="ce7c4eda-1c47-4b41-af56-530116c475b2">Custom Entry</VWEntry></Data>"#,
+                    ),
+                ],
+            }),
+            scene: Scene {
+                aux_data: Some(AuxData {
+                    classes: vec![Class {
+                        uuid: Uuid::parse_str("4157c914-094b-4808-87ee-dd7ebd6f9f97").unwrap(),
+                        name: "Class Name".to_string(),
+                    }],
+                    positions: vec![
+                        Position {
+                            uuid: Uuid::parse_str("48444956-9b0d-11f0-a3e9-dc567b68abae").unwrap(),
+                            name: "Position Name 1".to_string(),
+                        },
+                        Position {
+                            uuid: Uuid::parse_str("56b76b02-14ee-4309-bd58-0961493e93e3").unwrap(),
+                            name: "".to_string(),
+                        },
+                    ],
+                    symdefs: vec![
+                        Symdef {
+                            uuid: Uuid::parse_str("317a5549-659d-42a8-9cdb-5e1a411560c1").unwrap(),
+                            name: "Symdef Name 1".to_string(),
+                            child: Some(SymdefChild::Geometry3D(Geometry3D {
+                                file_name: "geometry_file.glb".to_string(),
+                                matrix: Some("{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string()),
+                            })),
+                        },
+                        Symdef {
+                            uuid: Uuid::parse_str("0584afe1-2cbc-4a98-b5d2-2261aafdbdbb").unwrap(),
+                            name: "Symdef Name 2".to_string(),
+                            child: Some(SymdefChild::Geometry3D(Geometry3D {
+                                file_name: "geometry_file.glb".to_string(),
+                                matrix: None,
+                            })),
+                        },
+                        Symdef {
+                            uuid: Uuid::parse_str("0f76c345-0f3f-4251-8e19-8dc0690ffd6f").unwrap(),
+                            name: "Symdef Name 3".to_string(),
+                            child: Some(SymdefChild::Symbol(Symbol {
+                                uuid: Uuid::parse_str("4de1d6e2-5437-4ec3-949e-2065cb4fbfce")
+                                    .unwrap(),
+                                symdef: Uuid::parse_str("4dd4be9e-ba5c-4ffb-90be-0419b4d977a4")
+                                    .unwrap(),
+                                matrix: None,
+                            })),
+                        },
+                        Symdef {
+                            uuid: Uuid::parse_str("a1907a3e-16c1-4702-984a-9de0b41adff4").unwrap(),
+                            name: "".to_string(),
+                            child: Some(SymdefChild::Symbol(Symbol {
+                                uuid: Uuid::parse_str("f7199cb8-e6f9-493d-8d52-7cf529453fc4")
+                                    .unwrap(),
+                                symdef: Uuid::parse_str("aa517032-d1f1-40d4-b14d-63ed6527349f")
+                                    .unwrap(),
+                                matrix: Some("{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string()),
+                            })),
+                        },
+                    ],
+                    mapping_definitions: vec![MappingDefinition {
+                        uuid: Uuid::parse_str("bef95eb8-98ac-4217-b10d-fb4b83381398").unwrap(),
+                        name: "Mapping Definition Name 1".to_string(),
+                        size_x: 1920,
+                        size_y: 1080,
+                        scale_handeling: "ScaleIgnoreRatio".to_string(),
+                        source: Some("movie.mov".to_string()),
+                    }],
+                }),
+                layers: Layers { layers: vec![] },
+            },
+        }
+    }
+
+    fn load_gsd() -> GeneralSceneDescription {
+        MvrFile::load_from_file("tests/mvr/sample_show.mvr")
+            .expect("Should load MvrFile")
+            .general_scene_description
+    }
+
+    #[test]
+    fn test_load_mvr_header() {
+        let gsd = expected_gsd();
+        let loaded = load_gsd();
+
+        assert_eq!(loaded.ver_major(), gsd.ver_major());
+        assert_eq!(loaded.ver_minor(), gsd.ver_minor());
+        assert_eq!(loaded.provider(), gsd.provider());
+        assert_eq!(loaded.provider_version(), gsd.provider_version());
+    }
+
+    #[test]
+    fn test_load_mvr_user_data() {
+        let gsd = expected_gsd();
+        let loaded = load_gsd();
+
+        let loaded_user_data = loaded.user_data();
+        let gsd_user_data = gsd.user_data();
+        assert_eq!(loaded_user_data.is_some(), gsd_user_data.is_some());
+        if let (Some(loaded_ud), Some(gsd_ud)) = (loaded_user_data, gsd_user_data) {
+            assert_eq!(loaded_ud.data(), gsd_ud.data());
+        }
+    }
+
+    #[test]
+    fn test_load_mvr_aux_data() {
+        let gsd = expected_gsd();
+        let loaded = load_gsd();
+
+        let loaded_scene = loaded.scene();
+        let gsd_scene = gsd.scene();
+
+        let loaded_aux = loaded_scene.aux_data();
+        let gsd_aux = gsd_scene.aux_data();
+        assert_eq!(loaded_aux.is_some(), gsd_aux.is_some());
+        if let (Some(loaded_aux), Some(gsd_aux)) = (loaded_aux, gsd_aux) {
+            // Classes.
+            let loaded_classes = loaded_aux.classes();
+            let gsd_classes = gsd_aux.classes();
+            assert_eq!(loaded_classes.len(), gsd_classes.len());
+            for (a, b) in loaded_classes.iter().zip(gsd_classes.iter()) {
+                assert_eq!(a.uuid(), b.uuid());
+                assert_eq!(a.name(), b.name());
+            }
+            // Positions.
+            let loaded_positions = loaded_aux.positions();
+            let gsd_positions = gsd_aux.positions();
+            assert_eq!(loaded_positions.len(), gsd_positions.len());
+            for (a, b) in loaded_positions.iter().zip(gsd_positions.iter()) {
+                assert_eq!(a.uuid(), b.uuid());
+                assert_eq!(a.name(), b.name());
+            }
+            // Symdefs.
+            let loaded_symdefs = loaded_aux.symdefs();
+            let gsd_symdefs = gsd_aux.symdefs();
+            assert_eq!(loaded_symdefs.len(), gsd_symdefs.len());
+            for (a, b) in loaded_symdefs.iter().zip(gsd_symdefs.iter()) {
+                assert_eq!(a.uuid(), b.uuid());
+                assert_eq!(a.name(), b.name());
+                match (a.child(), b.child()) {
+                    (Some(SymdefChild::Geometry3D(ag)), Some(SymdefChild::Geometry3D(bg))) => {
+                        assert_eq!(ag.file_name(), bg.file_name());
+                        assert_eq!(ag.matrix(), bg.matrix());
+                    }
+                    (Some(SymdefChild::Symbol(asym)), Some(SymdefChild::Symbol(bsym))) => {
+                        assert_eq!(asym.uuid(), bsym.uuid());
+                        assert_eq!(asym.symdef(), bsym.symdef());
+                        assert_eq!(asym.matrix(), bsym.matrix());
+                    }
+                    (None, None) => {}
+                    _ => panic!("Symdef child type mismatch"),
+                }
+            }
+            // Mapping Definitions.
+            let loaded_maps = loaded_aux.mapping_definitions();
+            let gsd_maps = gsd_aux.mapping_definitions();
+            assert_eq!(loaded_maps.len(), gsd_maps.len());
+            for (a, b) in loaded_maps.iter().zip(gsd_maps.iter()) {
+                assert_eq!(a.uuid(), b.uuid());
+                assert_eq!(a.name(), b.name());
+                assert_eq!(a.size_x(), b.size_x());
+                assert_eq!(a.size_y(), b.size_y());
+                assert_eq!(a.scale_handeling(), b.scale_handeling());
+                assert_eq!(a.source(), b.source());
+            }
+        }
+    }
+
+    #[test]
+    fn test_load_mvr_layers() {
+        let gsd = expected_gsd();
+        let loaded = load_gsd();
+
+        let loaded_scene = loaded.scene();
+        let gsd_scene = gsd.scene();
+
+        let loaded_layers = loaded_scene.layers();
+        let gsd_layers = gsd_scene.layers();
+        assert_eq!(loaded_layers.len(), gsd_layers.len());
+        for (a, b) in loaded_layers.iter().zip(gsd_layers.iter()) {
+            assert_eq!(a.uuid(), b.uuid());
+            assert_eq!(a.name(), b.name());
+            assert_eq!(a.matrix(), b.matrix());
+        }
+    }
 
     #[test]
     fn test_parse_matrix() {
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12}";
         let m = Matrix::from_str(s).unwrap();
-        assert_same!(m.u1, 1.0);
-        assert_same!(m.u2, 2.0);
-        assert_same!(m.u3, 3.0);
-        assert_same!(m.v1, 4.0);
-        assert_same!(m.v2, 5.0);
-        assert_same!(m.v3, 6.0);
-        assert_same!(m.w1, 7.0);
-        assert_same!(m.w2, 8.0);
-        assert_same!(m.w3, 9.0);
-        assert_same!(m.o1, 10.0);
-        assert_same!(m.o2, 11.0);
-        assert_same!(m.o3, 12.0);
+        assert_eq!(m.u1, 1.0);
+        assert_eq!(m.u2, 2.0);
+        assert_eq!(m.u3, 3.0);
+        assert_eq!(m.v1, 4.0);
+        assert_eq!(m.v2, 5.0);
+        assert_eq!(m.v3, 6.0);
+        assert_eq!(m.w1, 7.0);
+        assert_eq!(m.w2, 8.0);
+        assert_eq!(m.w3, 9.0);
+        assert_eq!(m.o1, 10.0);
+        assert_eq!(m.o2, 11.0);
+        assert_eq!(m.o3, 12.0);
 
         let s = " { 1 , 2 , 3 } { 4 , 5 , 6 } { 7 , 8 , 9 } { 10 , 11 , 12 } ";
         let m = Matrix::from_str(s).unwrap();
-        assert_same!(m.u1, 1.0);
-        assert_same!(m.u2, 2.0);
-        assert_same!(m.u3, 3.0);
-        assert_same!(m.v1, 4.0);
-        assert_same!(m.v2, 5.0);
-        assert_same!(m.v3, 6.0);
-        assert_same!(m.w1, 7.0);
-        assert_same!(m.w2, 8.0);
-        assert_same!(m.w3, 9.0);
-        assert_same!(m.o1, 10.0);
-        assert_same!(m.o2, 11.0);
-        assert_same!(m.o3, 12.0);
+        assert_eq!(m.u1, 1.0);
+        assert_eq!(m.u2, 2.0);
+        assert_eq!(m.u3, 3.0);
+        assert_eq!(m.v1, 4.0);
+        assert_eq!(m.v2, 5.0);
+        assert_eq!(m.v3, 6.0);
+        assert_eq!(m.w1, 7.0);
+        assert_eq!(m.w2, 8.0);
+        assert_eq!(m.w3, 9.0);
+        assert_eq!(m.o1, 10.0);
+        assert_eq!(m.o2, 11.0);
+        assert_eq!(m.o3, 12.0);
 
         let s = "{1,2,3}{4,5,6}{7,8,9}";
-        assert_same!(Matrix::from_str(s).is_err(), true);
+        assert!(Matrix::from_str(s).is_err());
 
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12,13}";
-        assert_same!(Matrix::from_str(s).is_err(), true);
+        assert!(Matrix::from_str(s).is_err());
 
         let s = "{1,2,foo}{4,5,6}{7,8,9}{10,11,12}";
-        assert_same!(Matrix::from_str(s).is_err(), true);
+        assert!(Matrix::from_str(s).is_err());
 
         let s = "{1,2,3}{4,5,6}{7,8,9{10,11,12}";
-        assert_same!(Matrix::from_str(s).is_err(), true);
+        assert!(Matrix::from_str(s).is_err());
     }
 
     #[test]
@@ -477,20 +672,20 @@ mod tests {
             o1: 10.0, o2: 11.0, o3: 12.0,
         };
         let s = m.to_string();
-        assert_same!(s, "{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string());
+        assert_eq!(s, "{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string());
 
         let m2 = Matrix::from_str(&s).unwrap();
-        assert_same!(m2.u1, 1.0);
-        assert_same!(m2.u2, 2.0);
-        assert_same!(m2.u3, 3.0);
-        assert_same!(m2.v1, 4.0);
-        assert_same!(m2.v2, 5.0);
-        assert_same!(m2.v3, 6.0);
-        assert_same!(m2.w1, 7.0);
-        assert_same!(m2.w2, 8.0);
-        assert_same!(m2.w3, 9.0);
-        assert_same!(m2.o1, 10.0);
-        assert_same!(m2.o2, 11.0);
-        assert_same!(m2.o3, 12.0);
+        assert_eq!(m2.u1, 1.0);
+        assert_eq!(m2.u2, 2.0);
+        assert_eq!(m2.u3, 3.0);
+        assert_eq!(m2.v1, 4.0);
+        assert_eq!(m2.v2, 5.0);
+        assert_eq!(m2.v3, 6.0);
+        assert_eq!(m2.w1, 7.0);
+        assert_eq!(m2.w2, 8.0);
+        assert_eq!(m2.w3, 9.0);
+        assert_eq!(m2.o1, 10.0);
+        assert_eq!(m2.o2, 11.0);
+        assert_eq!(m2.o3, 12.0);
     }
 }
