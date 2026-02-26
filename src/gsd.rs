@@ -1,18 +1,18 @@
-use std::str::FromStr;
+use std::{fmt, ops, str::FromStr};
 
-use facet::Opaque;
+use facet_xml as xml;
 use uuid::Uuid;
 
 #[derive(facet::Facet, Debug, Clone)]
 #[facet(rename = "GeneralSceneDescription")]
 pub struct GeneralSceneDescription {
-    #[facet(facet_xml::attribute, rename = "verMajor")]
+    #[facet(xml::attribute, rename = "verMajor")]
     ver_major: i32,
-    #[facet(facet_xml::attribute, rename = "verMinor")]
+    #[facet(xml::attribute, rename = "verMinor")]
     ver_minor: i32,
-    #[facet(facet_xml::attribute, rename = "provider")]
+    #[facet(xml::attribute, rename = "provider")]
     provider: String,
-    #[facet(facet_xml::attribute, rename = "providerVersion")]
+    #[facet(xml::attribute, rename = "providerVersion")]
     provider_version: String,
 
     #[facet(rename = "UserData")]
@@ -52,11 +52,11 @@ pub struct UserData {
     /// The data is stored as raw XML markup because its structure may be ambiguous or application-specific.
     /// The user is responsible for parsing or interpreting the contents as needed.
     #[facet(rename = "Data")]
-    data: Vec<facet_xml::RawMarkup>,
+    data: Vec<xml::RawMarkup>,
 }
 
 impl UserData {
-    pub fn data(&self) -> &[facet_xml::RawMarkup] {
+    pub fn data(&self) -> &[xml::RawMarkup] {
         &self.data
     }
 }
@@ -111,9 +111,9 @@ impl AuxData {
 
 #[derive(facet::Facet, Debug, Clone)]
 pub struct Class {
-    #[facet(facet_xml::attribute, rename = "uuid")]
+    #[facet(xml::attribute, rename = "uuid")]
     uuid: Uuid,
-    #[facet(facet_xml::attribute, rename = "name", default = "")]
+    #[facet(xml::attribute, rename = "name", default = "")]
     name: String,
 }
 
@@ -129,9 +129,9 @@ impl Class {
 
 #[derive(facet::Facet, Debug, Clone)]
 pub struct Position {
-    #[facet(facet_xml::attribute, rename = "uuid")]
+    #[facet(xml::attribute, rename = "uuid")]
     uuid: Uuid,
-    #[facet(facet_xml::attribute, rename = "name", default = "")]
+    #[facet(xml::attribute, rename = "name", default = "")]
     name: String,
 }
 
@@ -147,12 +147,22 @@ impl Position {
 
 #[derive(facet::Facet, Debug, Clone)]
 pub struct Symdef {
-    #[facet(facet_xml::attribute, rename = "uuid")]
+    #[facet(xml::attribute, rename = "uuid")]
     uuid: Uuid,
-    #[facet(facet_xml::attribute, rename = "name", default = "")]
+    #[facet(xml::attribute, rename = "name", default = "")]
     name: String,
-    #[facet(untagged)]
-    content: SymdefContent,
+
+    #[facet(flatten)]
+    child: Option<SymdefChild>,
+}
+
+#[derive(facet::Facet, Debug, Clone)]
+#[repr(u8)]
+pub enum SymdefChild {
+    #[facet(rename = "Geometry3D")]
+    Geometry3D(Geometry3D),
+    #[facet(rename = "Symbol")]
+    Symbol(Symbol),
 }
 
 impl Symdef {
@@ -164,26 +174,42 @@ impl Symdef {
         &self.name
     }
 
-    pub fn content(&self) -> &SymdefContent {
-        &self.content
+    pub fn child(&self) -> Option<&SymdefChild> {
+        self.child.as_ref()
     }
 }
 
 #[derive(facet::Facet, Debug, Clone)]
-#[repr(u8)]
-pub enum SymdefContent {
-    Geometry3D(Geometry3D),
-    Symbol(Symbol),
+pub struct MappingDefinition {
+    #[facet(xml::attribute, rename = "uuid")]
+    uuid: Uuid,
+    #[facet(xml::attribute, rename = "name", default = "")]
+    name: String,
+
+    #[facet(rename = "SizeX")]
+    size_x: i32,
+    #[facet(rename = "SizeY")]
+    size_y: i32,
+
+    // FIXME: I can't seem to figure out how to directly parse this enum
+    // using facet for some reason...
+    #[facet(rename = "ScaleHandeling", default = "ScaleKeepRatio")]
+    scale_handeling: String,
+
+    #[facet(xml::text)]
+    source: Option<String>,
 }
 
-#[derive(facet::Facet, Debug, Clone)]
-pub struct MappingDefinition {
-    #[facet(facet_xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(facet_xml::attribute, rename = "name", default = "")]
-    name: String,
-    //
-    // FIXME: Add children
+/// `ScaleHandeling` is intentionally misspelled here to match the specification.
+/// Although the correct spelling is `ScaleHandling`, we keep the spec's spelling for consistency.
+#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(C)]
+#[facet(default)]
+pub enum ScaleHandeling {
+    #[default]
+    ScaleKeepRatio,
+    ScaleIgnoreRatio,
+    KeepSizeCenter,
 }
 
 impl MappingDefinition {
@@ -194,6 +220,27 @@ impl MappingDefinition {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    pub fn size_x(&self) -> i32 {
+        self.size_x
+    }
+
+    pub fn size_y(&self) -> i32 {
+        self.size_y
+    }
+
+    pub fn scale_handeling(&self) -> ScaleHandeling {
+        match self.scale_handeling.as_str() {
+            "ScaleKeepRatio" => ScaleHandeling::ScaleKeepRatio,
+            "ScaleIgnoreRatio" => ScaleHandeling::ScaleIgnoreRatio,
+            "KeepSizeCenter" => ScaleHandeling::KeepSizeCenter,
+            _ => panic!("invalid ScaleHandeling"),
+        }
+    }
+
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
 }
 
 #[derive(facet::Facet, Debug, Clone)]
@@ -202,7 +249,7 @@ pub struct Layers {
     layers: Vec<Layer>,
 }
 
-impl std::ops::Deref for Layers {
+impl ops::Deref for Layers {
     type Target = [Layer];
 
     fn deref(&self) -> &Self::Target {
@@ -212,12 +259,14 @@ impl std::ops::Deref for Layers {
 
 #[derive(facet::Facet, Debug, Clone)]
 pub struct Layer {
-    #[facet(facet_xml::attribute, rename = "uuid")]
+    #[facet(xml::attribute, rename = "uuid")]
     uuid: Uuid,
-    #[facet(facet_xml::attribute, rename = "name", default = "")]
+    #[facet(xml::attribute, rename = "name", default = "")]
     name: String,
-    #[facet(rename = "Matrix")]
-    matrix: Option<Matrix>,
+
+    // FIXME: Find a way to serialize the Matrix directly using facet.
+    #[facet(flatten, rename = "Matrix")]
+    matrix: Option<String>,
 }
 
 impl Layer {
@@ -229,32 +278,41 @@ impl Layer {
         &self.name
     }
 
-    pub fn matrix(&self) -> Option<&Matrix> {
-        self.matrix.as_ref()
+    pub fn matrix(&self) -> Option<Matrix> {
+        self.matrix.as_ref().and_then(|s| Matrix::from_str(s).ok())
     }
 }
 
 #[derive(facet::Facet, Debug, Clone)]
 pub struct Geometry3D {
-    #[facet(facet_xml::attribute, rename = "fileName")]
+    #[facet(xml::attribute, rename = "fileName")]
     file_name: String,
 
-    #[facet(opaque, deserialize_with = opaque_type_from_str)]
-    matrix: Matrix,
+    // FIXME: Find a way to serialize the Matrix directly using facet.
+    #[facet(rename = "Matrix")]
+    matrix: Option<String>,
 }
 
 impl Geometry3D {
     pub fn file_name(&self) -> &str {
         &self.file_name
     }
+
+    pub fn matrix(&self) -> Option<Matrix> {
+        self.matrix.as_ref().and_then(|s| Matrix::from_str(s).ok())
+    }
 }
 
 #[derive(facet::Facet, Debug, Clone)]
 pub struct Symbol {
-    #[facet(facet_xml::attribute, rename = "uuid")]
+    #[facet(xml::attribute, rename = "uuid")]
     uuid: Uuid,
-    #[facet(facet_xml::attribute, rename = "name", default = "")]
-    name: String,
+    #[facet(xml::attribute, rename = "symdef", default = "")]
+    symdef: String,
+
+    // FIXME: Find a way to serialize the Matrix directly using facet.
+    #[facet(rename = "Matrix")]
+    matrix: Option<String>,
 }
 
 impl Symbol {
@@ -262,8 +320,12 @@ impl Symbol {
         self.uuid
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn symdef(&self) -> &str {
+        &self.symdef
+    }
+
+    pub fn matrix(&self) -> Option<Matrix> {
+        self.matrix.as_ref().and_then(|s| Matrix::from_str(s).ok())
     }
 }
 
@@ -338,9 +400,25 @@ impl FromStr for Matrix {
     }
 }
 
+impl fmt::Display for Matrix {
+    #[rustfmt::skip]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{{},{},{}}}{{{},{},{}}}{{{},{},{}}}{{{},{},{}}}",
+            self.u1, self.u2, self.u3,
+            self.v1, self.v2, self.v3,
+            self.w1, self.w2, self.w3,
+            self.o1, self.o2, self.o3
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use facet_assert::assert_same;
 
     use super::*;
 
@@ -348,52 +426,71 @@ mod tests {
     fn test_parse_matrix() {
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12}";
         let m = Matrix::from_str(s).unwrap();
-        assert_eq!(m.u1, 1.0);
-        assert_eq!(m.u2, 2.0);
-        assert_eq!(m.u3, 3.0);
-        assert_eq!(m.v1, 4.0);
-        assert_eq!(m.v2, 5.0);
-        assert_eq!(m.v3, 6.0);
-        assert_eq!(m.w1, 7.0);
-        assert_eq!(m.w2, 8.0);
-        assert_eq!(m.w3, 9.0);
-        assert_eq!(m.o1, 10.0);
-        assert_eq!(m.o2, 11.0);
-        assert_eq!(m.o3, 12.0);
+        assert_same!(m.u1, 1.0);
+        assert_same!(m.u2, 2.0);
+        assert_same!(m.u3, 3.0);
+        assert_same!(m.v1, 4.0);
+        assert_same!(m.v2, 5.0);
+        assert_same!(m.v3, 6.0);
+        assert_same!(m.w1, 7.0);
+        assert_same!(m.w2, 8.0);
+        assert_same!(m.w3, 9.0);
+        assert_same!(m.o1, 10.0);
+        assert_same!(m.o2, 11.0);
+        assert_same!(m.o3, 12.0);
 
         let s = " { 1 , 2 , 3 } { 4 , 5 , 6 } { 7 , 8 , 9 } { 10 , 11 , 12 } ";
         let m = Matrix::from_str(s).unwrap();
-        assert_eq!(m.u1, 1.0);
-        assert_eq!(m.u2, 2.0);
-        assert_eq!(m.u3, 3.0);
-        assert_eq!(m.v1, 4.0);
-        assert_eq!(m.v2, 5.0);
-        assert_eq!(m.v3, 6.0);
-        assert_eq!(m.w1, 7.0);
-        assert_eq!(m.w2, 8.0);
-        assert_eq!(m.w3, 9.0);
-        assert_eq!(m.o1, 10.0);
-        assert_eq!(m.o2, 11.0);
-        assert_eq!(m.o3, 12.0);
+        assert_same!(m.u1, 1.0);
+        assert_same!(m.u2, 2.0);
+        assert_same!(m.u3, 3.0);
+        assert_same!(m.v1, 4.0);
+        assert_same!(m.v2, 5.0);
+        assert_same!(m.v3, 6.0);
+        assert_same!(m.w1, 7.0);
+        assert_same!(m.w2, 8.0);
+        assert_same!(m.w3, 9.0);
+        assert_same!(m.o1, 10.0);
+        assert_same!(m.o2, 11.0);
+        assert_same!(m.o3, 12.0);
 
         let s = "{1,2,3}{4,5,6}{7,8,9}";
-        let err = Matrix::from_str(s).unwrap_err();
-        let msg = format!("{}", err);
-        assert!(msg.contains("Expected 12 values"));
+        assert_same!(Matrix::from_str(s).is_err(), true);
 
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12,13}";
-        let err = Matrix::from_str(s).unwrap_err();
-        let msg = format!("{}", err);
-        assert!(msg.contains("Expected 12 values"));
+        assert_same!(Matrix::from_str(s).is_err(), true);
 
         let s = "{1,2,foo}{4,5,6}{7,8,9}{10,11,12}";
-        let err = Matrix::from_str(s).unwrap_err();
-        let msg = format!("{}", err);
-        assert!(msg.contains("Failed to parse"));
+        assert_same!(Matrix::from_str(s).is_err(), true);
 
         let s = "{1,2,3}{4,5,6}{7,8,9{10,11,12}";
-        let err = Matrix::from_str(s).unwrap_err();
-        let msg = format!("{}", err);
-        assert!(msg.contains("Mismatched '{'"));
+        assert_same!(Matrix::from_str(s).is_err(), true);
+    }
+
+    #[test]
+    #[rustfmt::skip]
+    fn test_display_matrix() {
+        let m = Matrix {
+            u1: 1.0,  u2: 2.0,  u3: 3.0,
+            v1: 4.0,  v2: 5.0,  v3: 6.0,
+            w1: 7.0,  w2: 8.0,  w3: 9.0,
+            o1: 10.0, o2: 11.0, o3: 12.0,
+        };
+        let s = m.to_string();
+        assert_same!(s, "{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string());
+
+        let m2 = Matrix::from_str(&s).unwrap();
+        assert_same!(m2.u1, 1.0);
+        assert_same!(m2.u2, 2.0);
+        assert_same!(m2.u3, 3.0);
+        assert_same!(m2.v1, 4.0);
+        assert_same!(m2.v2, 5.0);
+        assert_same!(m2.v3, 6.0);
+        assert_same!(m2.w1, 7.0);
+        assert_same!(m2.w2, 8.0);
+        assert_same!(m2.w3, 9.0);
+        assert_same!(m2.o1, 10.0);
+        assert_same!(m2.o2, 11.0);
+        assert_same!(m2.o3, 12.0);
     }
 }

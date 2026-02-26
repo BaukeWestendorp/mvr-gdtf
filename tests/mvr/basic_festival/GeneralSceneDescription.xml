@@ -2,9 +2,7 @@
 <GeneralSceneDescription provider="Provider" providerVersion="Provider Version" verMajor="1" verMinor="5">
   <UserData>
     <Data provider="Data Provider 1" ver="0.1" />
-    <Data provider="Data Provider 2">
-      <VWEntry key="ce7c4eda-1c47-4b41-af56-530116c475b2">Custom Entry</VWEntry>
-    </Data>
+    <Data provider="Data Provider 2"><VWEntry key="ce7c4eda-1c47-4b41-af56-530116c475b2">Custom Entry</VWEntry></Data>
   </UserData>
   <Scene>
   <AUXData>
@@ -30,8 +28,8 @@
     <MappingDefinition name="Mapping Definition Name 1" uuid="bef95eb8-98ac-4217-b10d-fb4b83381398">
       <SizeX>1920</SizeX>
       <SizeY>1080</SizeY>
+      <ScaleHandeling>ScaleIgnoreRatio</ScaleHandeling>
       movie.mov
-      <ScaleHandeling>UpScale</ScaleHandeling>
     </MappingDefinition>
   </AUXData>
     <Layers>
