@@ -1,29 +1,36 @@
 use std::{
-    fmt, ops,
+    fmt,
     str::{self, FromStr},
 };
 
 use facet_xml as xml;
-use uuid::Uuid;
 
-use crate::FileName;
+mod aux_data;
+mod layers;
+mod scene;
+mod user_data;
+
+pub use aux_data::*;
+pub use layers::*;
+pub use scene::*;
+pub use user_data::*;
 
 #[derive(facet::Facet, Debug, Clone, PartialEq)]
 #[facet(rename = "GeneralSceneDescription")]
 pub struct GeneralSceneDescription {
     #[facet(xml::attribute, rename = "verMajor")]
-    ver_major: i64,
+    pub(crate) ver_major: i64,
     #[facet(xml::attribute, rename = "verMinor")]
-    ver_minor: i64,
+    pub(crate) ver_minor: i64,
     #[facet(xml::attribute, rename = "provider", default = "")]
-    provider: String,
+    pub(crate) provider: String,
     #[facet(xml::attribute, rename = "providerVersion", default = "")]
-    provider_version: String,
+    pub(crate) provider_version: String,
 
     #[facet(rename = "UserData", default)]
-    user_data: UserData,
+    pub(crate) user_data: UserData,
     #[facet(rename = "Scene", default)]
-    scene: Scene,
+    pub(crate) scene: Scene,
 }
 
 impl GeneralSceneDescription {
@@ -50,378 +57,6 @@ impl GeneralSceneDescription {
     pub fn scene(&self) -> &Scene {
         &self.scene
     }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq, Default)]
-pub struct UserData {
-    /// The data is stored as raw XML markup because its structure may be ambiguous or application-specific.
-    /// The user is responsible for parsing or interpreting the contents as needed.
-    #[facet(rename = "Data")]
-    data: Vec<xml::RawMarkup>,
-}
-
-impl UserData {
-    pub fn data(&self) -> &[xml::RawMarkup] {
-        &self.data
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Scene {
-    #[facet(rename = "AUXData", default)]
-    aux_data: AuxData,
-    #[facet(rename = "Layers", default)]
-    layers: Layers,
-}
-
-impl Scene {
-    pub fn aux_data(&self) -> &AuxData {
-        &self.aux_data
-    }
-
-    pub fn layers(&self) -> &[Layer] {
-        &self.layers
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq, Default)]
-pub struct AuxData {
-    #[facet(rename = "Symdef")]
-    symdefs: Vec<Symdef>,
-    #[facet(rename = "Position")]
-    positions: Vec<Position>,
-    #[facet(rename = "MappingDefinition")]
-    mapping_definitions: Vec<MappingDefinition>,
-    #[facet(rename = "Class")]
-    class: Option<Class>,
-}
-
-impl AuxData {
-    pub fn symdefs(&self) -> &[Symdef] {
-        &self.symdefs
-    }
-
-    pub fn positions(&self) -> &[Position] {
-        &self.positions
-    }
-
-    pub fn mapping_definitions(&self) -> &[MappingDefinition] {
-        &self.mapping_definitions
-    }
-
-    pub fn class(&self) -> Option<&Class> {
-        self.class.as_ref()
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Class {
-    #[facet(xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(xml::attribute, rename = "name", default = "")]
-    name: String,
-}
-
-impl Class {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Position {
-    #[facet(xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(xml::attribute, rename = "name", default = "")]
-    name: String,
-}
-
-impl Position {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Symdef {
-    #[facet(xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(xml::attribute, rename = "name", default = "")]
-    name: String,
-
-    #[facet(rename = "ChildList", default)]
-    child_list: SymdefChildList,
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq, Default)]
-pub struct SymdefChildList {
-    #[facet(rename = "Geometry3D")]
-    geometry3ds: Vec<Geometry3D>,
-    #[facet(rename = "Symbol")]
-    symbols: Vec<Symbol>,
-}
-
-impl Symdef {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn geometry3ds(&self) -> &[Geometry3D] {
-        &self.child_list.geometry3ds
-    }
-
-    pub fn symbols(&self) -> &[Symbol] {
-        &self.child_list.symbols
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct MappingDefinition {
-    #[facet(xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(xml::attribute, rename = "name", default = "")]
-    name: String,
-
-    #[facet(rename = "SizeX")]
-    size_x: SizeX,
-    #[facet(rename = "SizeY")]
-    size_y: SizeY,
-
-    // FIXME: I can't seem to figure out how to directly parse this enum
-    // using facet for some reason...
-    #[facet(rename = "ScaleHandeling", default = "ScaleKeepRatio")]
-    scale_handeling: String,
-
-    #[facet(rename = "Source")]
-    source: Source,
-}
-
-impl MappingDefinition {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn size_x(&self) -> i64 {
-        *self.size_x
-    }
-
-    pub fn size_y(&self) -> i64 {
-        *self.size_y
-    }
-
-    pub fn scale_handeling(&self) -> ScaleHandeling {
-        match self.scale_handeling.as_str() {
-            "ScaleKeepRatio" => ScaleHandeling::ScaleKeepRatio,
-            "ScaleIgnoreRatio" => ScaleHandeling::ScaleIgnoreRatio,
-            "KeepSizeCenter" => ScaleHandeling::KeepSizeCenter,
-            _ => panic!("invalid ScaleHandeling"),
-        }
-    }
-
-    pub fn source(&self) -> &Source {
-        &self.source
-    }
-}
-
-/// `ScaleHandeling` is intentionally misspelled here to match the specification.
-/// Although the correct spelling is `ScaleHandling`, we keep the spec's spelling for consistency.
-#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[repr(C)]
-#[facet(default)]
-pub enum ScaleHandeling {
-    #[default]
-    ScaleKeepRatio,
-    ScaleIgnoreRatio,
-    KeepSizeCenter,
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq, Eq)]
-pub struct Source {
-    #[facet(xml::attribute, rename = "linkedGeometry")]
-    linked_geometry: String,
-    #[facet(xml::attribute, rename = "type")]
-    type_: SourceType,
-
-    #[facet(xml::text)]
-    value: String,
-}
-
-impl Source {
-    pub fn linked_geometry(&self) -> &str {
-        &self.linked_geometry
-    }
-
-    pub fn type_(&self) -> SourceType {
-        self.type_
-    }
-
-    /// - If type is NDI or CITP, this is the Stream Name.
-    /// - If type is File, this is the filename in MVR file.
-    /// - If type is CaptureDevice, this is the CaptureDevice Name.
-    pub fn value(&self) -> &str {
-        &self.value
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(C)]
-pub enum SourceType {
-    Ndi,
-    File,
-    Citp,
-    CaptureDevice,
-}
-
-#[cfg(not(tarpaulin_include))]
-impl FromStr for SourceType {
-    type Err = crate::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "NDI" => Ok(SourceType::Ndi),
-            "File" => Ok(SourceType::File),
-            "CITP" => Ok(SourceType::Citp),
-            "CaptureDevice" => Ok(SourceType::CaptureDevice),
-            s => Err(crate::Error::InvalidSourceType(s.to_string())),
-        }
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl fmt::Display for SourceType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            SourceType::Ndi => "NDI",
-            SourceType::File => "File",
-            SourceType::Citp => "CITP",
-            SourceType::CaptureDevice => "CaptureDevice",
-        };
-        write!(f, "{}", s)
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Geometry3D {
-    #[facet(xml::attribute, rename = "fileName")]
-    file_name: FileName,
-
-    // FIXME: Find a way to serialize the Matrix directly using facet.
-    #[facet(rename = "Matrix")]
-    matrix: Option<String>,
-}
-
-impl Geometry3D {
-    pub fn file_name(&self) -> &FileName {
-        &self.file_name
-    }
-
-    pub fn matrix(&self) -> Option<Matrix4x3> {
-        self.matrix
-            .as_ref()
-            .and_then(|s| Matrix4x3::from_str(s).ok())
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Symbol {
-    #[facet(xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(xml::attribute, rename = "symdef", default = "")]
-    symdef: Uuid,
-
-    // FIXME: Find a way to serialize the Matrix directly using facet.
-    #[facet(rename = "Matrix")]
-    matrix: Option<String>,
-}
-
-impl Symbol {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn symdef(&self) -> Uuid {
-        self.symdef
-    }
-
-    pub fn matrix(&self) -> Option<Matrix4x3> {
-        self.matrix
-            .as_ref()
-            .and_then(|s| Matrix4x3::from_str(s).ok())
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Layers {
-    #[facet(rename = "Layer")]
-    layers: Vec<Layer>,
-}
-
-impl ops::Deref for Layers {
-    type Target = [Layer];
-
-    fn deref(&self) -> &Self::Target {
-        &self.layers
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Layer {
-    #[facet(xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(xml::attribute, rename = "name", default = "")]
-    name: String,
-
-    // FIXME: Find a way to serialize the Matrix directly using facet.
-    #[facet(flatten, rename = "Matrix")]
-    matrix: Option<String>,
-}
-
-impl Layer {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn matrix(&self) -> Option<Matrix4x3> {
-        self.matrix
-            .as_ref()
-            .and_then(|s| Matrix4x3::from_str(s).ok())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, facet::Facet)]
-pub struct Matrix4x3 {
-    u1: f64,
-    u2: f64,
-    u3: f64,
-    v1: f64,
-    v2: f64,
-    v3: f64,
-    w1: f64,
-    w2: f64,
-    w3: f64,
-    o1: f64,
-    o2: f64,
-    o3: f64,
 }
 
 impl FromStr for Matrix4x3 {
@@ -497,92 +132,14 @@ impl fmt::Display for Matrix4x3 {
     }
 }
 
-#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct SizeX(i64);
-
-#[cfg(not(tarpaulin_include))]
-impl From<i64> for SizeX {
-    fn from(val: i64) -> Self {
-        SizeX(val)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl From<SizeX> for i64 {
-    fn from(val: SizeX) -> i64 {
-        val.0
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl ops::Deref for SizeX {
-    type Target = i64;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl fmt::Display for SizeX {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl str::FromStr for SizeX {
-    type Err = <i64 as str::FromStr>::Err;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i64>().map(SizeX)
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct SizeY(i64);
-
-#[cfg(not(tarpaulin_include))]
-impl From<i64> for SizeY {
-    fn from(val: i64) -> Self {
-        SizeY(val)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl From<SizeY> for i64 {
-    fn from(val: SizeY) -> i64 {
-        val.0
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl ops::Deref for SizeY {
-    type Target = i64;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl fmt::Display for SizeY {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[cfg(not(tarpaulin_include))]
-impl str::FromStr for SizeY {
-    type Err = <i64 as str::FromStr>::Err;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i64>().map(SizeY)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
+    use uuid::Uuid;
+
     use super::*;
-    use crate::MvrFile;
+    use crate::{FileName, MvrFile};
 
     fn expected_gsd() -> GeneralSceneDescription {
         GeneralSceneDescription {
