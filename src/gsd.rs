@@ -288,6 +288,7 @@ pub enum SourceType {
     CaptureDevice,
 }
 
+#[cfg(not(tarpaulin_include))]
 impl FromStr for SourceType {
     type Err = crate::Error;
 
@@ -302,6 +303,7 @@ impl FromStr for SourceType {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl fmt::Display for SourceType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
@@ -426,53 +428,57 @@ impl FromStr for Matrix4x3 {
     type Err = crate::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.replace(char::is_whitespace, "");
+        let mut rest = s.trim();
+        let mut groups = [[0.0; 3]; 4];
 
-        let mut values = Vec::new();
-        let mut rest = s.as_str();
-        while let Some(start) = rest.find('{') {
-            let rest2 = &rest[start + 1..];
-            if let Some(end) = rest2.find('}') {
-                let group = &rest2[..end];
-                for num in group.split(',') {
-                    if num.is_empty() {
-                        return Err(crate::Error::MatrixParseError(
-                            "Empty value in matrix group".to_string(),
-                        ));
-                    }
-                    let val: f64 = num.parse().map_err(|_| {
-                        crate::Error::MatrixParseError(format!("Failed to parse '{}' as f64", num))
-                    })?;
-                    values.push(val);
-                }
-                rest = &rest2[end + 1..];
-            } else {
+        for group in &mut groups {
+            rest = rest.trim_start();
+            if !rest.starts_with('{') {
                 return Err(crate::Error::MatrixParseError(
-                    "Mismatched '{' in matrix string".to_string(),
+                    "Missing opening brace".into(),
                 ));
+            }
+            rest = &rest[1..];
+
+            let end = rest
+                .find('}')
+                .ok_or_else(|| crate::Error::MatrixParseError("Missing closing brace".into()))?;
+
+            let content = &rest[..end];
+            rest = &rest[end + 1..];
+
+            let parts: Vec<&str> = content.split(',').collect();
+            if parts.len() != 3 {
+                return Err(crate::Error::MatrixParseError(
+                    "Expected 3 items per group".into(),
+                ));
+            }
+
+            for (i, part) in parts.iter().enumerate() {
+                group[i] = part
+                    .trim()
+                    .parse::<f64>()
+                    .map_err(|_| crate::Error::MatrixParseError("Invalid float".into()))?;
             }
         }
 
-        if values.len() != 12 {
-            return Err(crate::Error::MatrixParseError(format!(
-                "Expected 12 values for Matrix, got {}",
-                values.len()
-            )));
+        if !rest.trim().is_empty() {
+            return Err(crate::Error::MatrixParseError("Trailing characters".into()));
         }
 
         Ok(Matrix4x3 {
-            u1: values[0],
-            u2: values[1],
-            u3: values[2],
-            v1: values[3],
-            v2: values[4],
-            v3: values[5],
-            w1: values[6],
-            w2: values[7],
-            w3: values[8],
-            o1: values[9],
-            o2: values[10],
-            o3: values[11],
+            u1: groups[0][0],
+            u2: groups[0][1],
+            u3: groups[0][2],
+            v1: groups[1][0],
+            v2: groups[1][1],
+            v3: groups[1][2],
+            w1: groups[2][0],
+            w2: groups[2][1],
+            w3: groups[2][2],
+            o1: groups[3][0],
+            o2: groups[3][1],
+            o3: groups[3][2],
         })
     }
 }
@@ -494,18 +500,21 @@ impl fmt::Display for Matrix4x3 {
 #[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct SizeX(i64);
 
+#[cfg(not(tarpaulin_include))]
 impl From<i64> for SizeX {
     fn from(val: i64) -> Self {
         SizeX(val)
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl From<SizeX> for i64 {
     fn from(val: SizeX) -> i64 {
         val.0
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl ops::Deref for SizeX {
     type Target = i64;
     fn deref(&self) -> &Self::Target {
@@ -513,12 +522,14 @@ impl ops::Deref for SizeX {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl fmt::Display for SizeX {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl str::FromStr for SizeX {
     type Err = <i64 as str::FromStr>::Err;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -529,18 +540,21 @@ impl str::FromStr for SizeX {
 #[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct SizeY(i64);
 
+#[cfg(not(tarpaulin_include))]
 impl From<i64> for SizeY {
     fn from(val: i64) -> Self {
         SizeY(val)
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl From<SizeY> for i64 {
     fn from(val: SizeY) -> i64 {
         val.0
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl ops::Deref for SizeY {
     type Target = i64;
     fn deref(&self) -> &Self::Target {
@@ -548,12 +562,14 @@ impl ops::Deref for SizeY {
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl fmt::Display for SizeY {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
+#[cfg(not(tarpaulin_include))]
 impl str::FromStr for SizeY {
     type Err = <i64 as str::FromStr>::Err;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -690,7 +706,7 @@ mod tests {
         let loaded = load_gsd();
         let expected = expected_gsd();
 
-        assert_eq!(loaded.user_data(), expected.user_data());
+        assert_eq!(loaded.user_data().data(), expected.user_data().data());
     }
 
     #[test]
@@ -758,7 +774,10 @@ mod tests {
             assert_eq!(a.size_x(), b.size_x());
             assert_eq!(a.size_y(), b.size_y());
             assert_eq!(a.scale_handeling(), b.scale_handeling());
-            assert_eq!(a.source(), b.source());
+
+            assert_eq!(a.source().linked_geometry(), b.source().linked_geometry());
+            assert_eq!(a.source().type_(), b.source().type_());
+            assert_eq!(a.source().value(), b.source().value());
         }
     }
 
@@ -813,17 +832,77 @@ mod tests {
         assert_eq!(m.o2, 11.0);
         assert_eq!(m.o3, 12.0);
 
+        let s = "";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
+        let s = "    ";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
+        let s = "{}{}{}{}";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
+        let s = "{1,2,3}{}{7,8,9}{10,11,12}";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
         let s = "{1,2,3}{4,5,6}{7,8,9}";
-        assert!(Matrix4x3::from_str(s).is_err());
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
 
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12,13}";
-        assert!(Matrix4x3::from_str(s).is_err());
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
 
         let s = "{1,2,foo}{4,5,6}{7,8,9}{10,11,12}";
-        assert!(Matrix4x3::from_str(s).is_err());
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
 
         let s = "{1,2,3}{4,5,6}{7,8,9{10,11,12}";
-        assert!(Matrix4x3::from_str(s).is_err());
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
+        let s = "1,2,3,4,5,6,7,8,9,10,11,12";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
+        let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
+        let s = "{1,2,3}4,5,6}{7,8,9}{10,11,12}";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
+
+        let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12}}";
+        assert!(matches!(
+            Matrix4x3::from_str(s),
+            Err(crate::Error::MatrixParseError(_))
+        ));
     }
 
     #[test]

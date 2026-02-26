@@ -12,3 +12,6 @@ zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 facet-assert = "0.43.2"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)'] }
