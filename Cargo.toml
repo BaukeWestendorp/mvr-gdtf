@@ -9,3 +9,6 @@ facet-xml = "0.43.1"
 thiserror = "2.0.18"
 uuid = { version = "1.21.0", features = ["v4"] }
 zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+facet-assert = "0.43.2"

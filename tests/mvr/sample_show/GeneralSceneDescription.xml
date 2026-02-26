@@ -7,20 +7,28 @@
     <Position name="Position Name 1" uuid="48444956-9b0d-11f0-a3e9-dc567b68abae" />
     <Position uuid="56b76b02-14ee-4309-bd58-0961493e93e3" />
     <Symdef name="Symdef Name 1" uuid="317a5549-659d-42a8-9cdb-5e1a411560c1">
-      <Geometry3D fileName="geometry_file.glb">
-        <Matrix>{1,2,3}{4,5,6}{7,8,9}{10,11,12}</Matrix>
-      </Geometry3D>
+      <ChildList>
+        <Geometry3D fileName="geometry_file.glb">
+          <Matrix>{1,2,3}{4,5,6}{7,8,9}{10,11,12}</Matrix>
+        </Geometry3D>
+      </ChildList>
     </Symdef>
     <Symdef name="Symdef Name 2" uuid="0584afe1-2cbc-4a98-b5d2-2261aafdbdbb">
-      <Geometry3D fileName="geometry_file.glb" />
+      <ChildList>
+        <Geometry3D fileName="geometry_file.glb" />
+      </ChildList>
     </Symdef>
     <Symdef name="Symdef Name 3" uuid="0f76c345-0f3f-4251-8e19-8dc0690ffd6f">
-      <Symbol uuid="4de1d6e2-5437-4ec3-949e-2065cb4fbfce" symdef="4dd4be9e-ba5c-4ffb-90be-0419b4d977a4" />
+      <ChildList>
+        <Symbol uuid="4de1d6e2-5437-4ec3-949e-2065cb4fbfce" symdef="4dd4be9e-ba5c-4ffb-90be-0419b4d977a4" />
+      </ChildList>
     </Symdef>
     <Symdef uuid="a1907a3e-16c1-4702-984a-9de0b41adff4">
-      <Symbol uuid="f7199cb8-e6f9-493d-8d52-7cf529453fc4" symdef="aa517032-d1f1-40d4-b14d-63ed6527349f">
-        <Matrix>{1,2,3}{4,5,6}{7,8,9}{10,11,12}</Matrix>
-      </Symbol>
+      <ChildList>
+        <Symbol uuid="f7199cb8-e6f9-493d-8d52-7cf529453fc4" symdef="aa517032-d1f1-40d4-b14d-63ed6527349f">
+          <Matrix>{1,2,3}{4,5,6}{7,8,9}{10,11,12}</Matrix>
+        </Symbol>
+      </ChildList>
     </Symdef>
     <MappingDefinition name="Mapping Definition Name 1" uuid="bef95eb8-98ac-4217-b10d-fb4b83381398">
       <SizeX>1920</SizeX>
@@ -30,7 +38,7 @@
     </MappingDefinition>
   </AUXData>
     <Layers>
-    <!-- <Layer name="Layer 1 Name" uuid="1e247ae7-0f0a-4061-a28d-483e37eb5578"> -->
+    <Layer name="Layer 1 Name" uuid="1e247ae7-0f0a-4061-a28d-483e37eb5578">
       <ChildList>
         <Fixture name="Robe Robin Esprite" uuid="CE7C4EDA-1C47-4B41-AF56-530116C475B2">
           <Matrix>{-1.000000,-0.000000,-0.000000}{0.000000,-1.000000,0.000000}{0.000000,0.000000,1.000000}{-1500.000000,-1000.000000,8524.000000}</Matrix>
@@ -4402,8 +4410,8 @@
           <Mappings />
         </Fixture>
       </ChildList>
-    <!-- </Layer> -->
-    <!-- <Layer name="Layer 2 Name" uuid="7bfe64c8-8a96-402b-a1dc-85395f93890b" /> -->
+    </Layer>
+    <Layer name="Layer 2 Name" uuid="7bfe64c8-8a96-402b-a1dc-85395f93890b" />
     </Layers>
   </Scene>
 </GeneralSceneDescription>
