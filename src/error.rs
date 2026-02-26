@@ -25,6 +25,10 @@ pub enum Error {
     #[error("The archive is missing a General Scene Description XML file: {source}")]
     MissingGeneralSceneDescriptionXml { source: zip::result::ZipError },
 
+    #[error("Invalid file name: {0}")]
+    InvalidFileName(String),
     #[error("Failed to parse matrix: {0}")]
     MatrixParseError(String),
+    #[error("Invalid source type: {0}")]
+    InvalidSourceType(String),
 }

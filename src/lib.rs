@@ -2,9 +2,11 @@ use std::{fs::File, io::Read as _, path::Path};
 
 mod error;
 mod gsd;
+mod value;
 
 pub use error::*;
 pub use gsd::*;
+pub use value::*;
 
 use zip::ZipArchive;
 

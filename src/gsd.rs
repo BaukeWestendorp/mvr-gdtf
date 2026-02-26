@@ -1,32 +1,37 @@
-use std::{fmt, ops, str::FromStr};
+use std::{
+    fmt, ops,
+    str::{self, FromStr},
+};
 
 use facet_xml as xml;
 use uuid::Uuid;
+
+use crate::FileName;
 
 #[derive(facet::Facet, Debug, Clone, PartialEq)]
 #[facet(rename = "GeneralSceneDescription")]
 pub struct GeneralSceneDescription {
     #[facet(xml::attribute, rename = "verMajor")]
-    ver_major: i32,
+    ver_major: i64,
     #[facet(xml::attribute, rename = "verMinor")]
-    ver_minor: i32,
+    ver_minor: i64,
     #[facet(xml::attribute, rename = "provider", default = "")]
     provider: String,
     #[facet(xml::attribute, rename = "providerVersion", default = "")]
     provider_version: String,
 
-    #[facet(rename = "UserData")]
-    user_data: Option<UserData>,
-    #[facet(rename = "Scene")]
+    #[facet(rename = "UserData", default)]
+    user_data: UserData,
+    #[facet(rename = "Scene", default)]
     scene: Scene,
 }
 
 impl GeneralSceneDescription {
-    pub fn ver_major(&self) -> i32 {
+    pub fn ver_major(&self) -> i64 {
         self.ver_major
     }
 
-    pub fn ver_minor(&self) -> i32 {
+    pub fn ver_minor(&self) -> i64 {
         self.ver_minor
     }
 
@@ -38,8 +43,8 @@ impl GeneralSceneDescription {
         &self.provider_version
     }
 
-    pub fn user_data(&self) -> Option<&UserData> {
-        self.user_data.as_ref()
+    pub fn user_data(&self) -> &UserData {
+        &self.user_data
     }
 
     pub fn scene(&self) -> &Scene {
@@ -47,7 +52,7 @@ impl GeneralSceneDescription {
     }
 }
 
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
+#[derive(facet::Facet, Debug, Clone, PartialEq, Default)]
 pub struct UserData {
     /// The data is stored as raw XML markup because its structure may be ambiguous or application-specific.
     /// The user is responsible for parsing or interpreting the contents as needed.
@@ -63,15 +68,15 @@ impl UserData {
 
 #[derive(facet::Facet, Debug, Clone, PartialEq)]
 pub struct Scene {
-    #[facet(rename = "AUXData")]
-    aux_data: Option<AuxData>,
+    #[facet(rename = "AUXData", default)]
+    aux_data: AuxData,
     #[facet(rename = "Layers", default)]
     layers: Layers,
 }
 
 impl Scene {
-    pub fn aux_data(&self) -> Option<&AuxData> {
-        self.aux_data.as_ref()
+    pub fn aux_data(&self) -> &AuxData {
+        &self.aux_data
     }
 
     pub fn layers(&self) -> &[Layer] {
@@ -79,7 +84,7 @@ impl Scene {
     }
 }
 
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
+#[derive(facet::Facet, Debug, Clone, PartialEq, Default)]
 pub struct AuxData {
     #[facet(rename = "Symdef")]
     symdefs: Vec<Symdef>,
@@ -88,7 +93,7 @@ pub struct AuxData {
     #[facet(rename = "MappingDefinition")]
     mapping_definitions: Vec<MappingDefinition>,
     #[facet(rename = "Class")]
-    classes: Vec<Class>,
+    class: Option<Class>,
 }
 
 impl AuxData {
@@ -104,8 +109,8 @@ impl AuxData {
         &self.mapping_definitions
     }
 
-    pub fn classes(&self) -> &[Class] {
-        &self.classes
+    pub fn class(&self) -> Option<&Class> {
+        self.class.as_ref()
     }
 }
 
@@ -152,11 +157,11 @@ pub struct Symdef {
     #[facet(xml::attribute, rename = "name", default = "")]
     name: String,
 
-    #[facet(rename = "ChildList")]
+    #[facet(rename = "ChildList", default)]
     child_list: SymdefChildList,
 }
 
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
+#[derive(facet::Facet, Debug, Clone, PartialEq, Default)]
 pub struct SymdefChildList {
     #[facet(rename = "Geometry3D")]
     geometry3ds: Vec<Geometry3D>,
@@ -190,17 +195,48 @@ pub struct MappingDefinition {
     name: String,
 
     #[facet(rename = "SizeX")]
-    size_x: i32,
+    size_x: SizeX,
     #[facet(rename = "SizeY")]
-    size_y: i32,
+    size_y: SizeY,
 
     // FIXME: I can't seem to figure out how to directly parse this enum
     // using facet for some reason...
     #[facet(rename = "ScaleHandeling", default = "ScaleKeepRatio")]
     scale_handeling: String,
 
-    #[facet(xml::text)]
-    source: Option<String>,
+    #[facet(rename = "Source")]
+    source: Source,
+}
+
+impl MappingDefinition {
+    pub fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn size_x(&self) -> i64 {
+        *self.size_x
+    }
+
+    pub fn size_y(&self) -> i64 {
+        *self.size_y
+    }
+
+    pub fn scale_handeling(&self) -> ScaleHandeling {
+        match self.scale_handeling.as_str() {
+            "ScaleKeepRatio" => ScaleHandeling::ScaleKeepRatio,
+            "ScaleIgnoreRatio" => ScaleHandeling::ScaleIgnoreRatio,
+            "KeepSizeCenter" => ScaleHandeling::KeepSizeCenter,
+            _ => panic!("invalid ScaleHandeling"),
+        }
+    }
+
+    pub fn source(&self) -> &Source {
+        &self.source
+    }
 }
 
 /// `ScaleHandeling` is intentionally misspelled here to match the specification.
@@ -215,34 +251,116 @@ pub enum ScaleHandeling {
     KeepSizeCenter,
 }
 
-impl MappingDefinition {
+#[derive(facet::Facet, Debug, Clone, PartialEq, Eq)]
+pub struct Source {
+    #[facet(xml::attribute, rename = "linkedGeometry")]
+    linked_geometry: String,
+    #[facet(xml::attribute, rename = "type")]
+    type_: SourceType,
+
+    #[facet(xml::text)]
+    value: String,
+}
+
+impl Source {
+    pub fn linked_geometry(&self) -> &str {
+        &self.linked_geometry
+    }
+
+    pub fn type_(&self) -> SourceType {
+        self.type_
+    }
+
+    /// - If type is NDI or CITP, this is the Stream Name.
+    /// - If type is File, this is the filename in MVR file.
+    /// - If type is CaptureDevice, this is the CaptureDevice Name.
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+}
+
+#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub enum SourceType {
+    Ndi,
+    File,
+    Citp,
+    CaptureDevice,
+}
+
+impl FromStr for SourceType {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "NDI" => Ok(SourceType::Ndi),
+            "File" => Ok(SourceType::File),
+            "CITP" => Ok(SourceType::Citp),
+            "CaptureDevice" => Ok(SourceType::CaptureDevice),
+            s => Err(crate::Error::InvalidSourceType(s.to_string())),
+        }
+    }
+}
+
+impl fmt::Display for SourceType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            SourceType::Ndi => "NDI",
+            SourceType::File => "File",
+            SourceType::Citp => "CITP",
+            SourceType::CaptureDevice => "CaptureDevice",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(facet::Facet, Debug, Clone, PartialEq)]
+pub struct Geometry3D {
+    #[facet(xml::attribute, rename = "fileName")]
+    file_name: FileName,
+
+    // FIXME: Find a way to serialize the Matrix directly using facet.
+    #[facet(rename = "Matrix")]
+    matrix: Option<String>,
+}
+
+impl Geometry3D {
+    pub fn file_name(&self) -> &FileName {
+        &self.file_name
+    }
+
+    pub fn matrix(&self) -> Option<Matrix4x3> {
+        self.matrix
+            .as_ref()
+            .and_then(|s| Matrix4x3::from_str(s).ok())
+    }
+}
+
+#[derive(facet::Facet, Debug, Clone, PartialEq)]
+pub struct Symbol {
+    #[facet(xml::attribute, rename = "uuid")]
+    uuid: Uuid,
+    #[facet(xml::attribute, rename = "symdef", default = "")]
+    symdef: Uuid,
+
+    // FIXME: Find a way to serialize the Matrix directly using facet.
+    #[facet(rename = "Matrix")]
+    matrix: Option<String>,
+}
+
+impl Symbol {
     pub fn uuid(&self) -> Uuid {
         self.uuid
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
+    pub fn symdef(&self) -> Uuid {
+        self.symdef
     }
 
-    pub fn size_x(&self) -> i32 {
-        self.size_x
-    }
-
-    pub fn size_y(&self) -> i32 {
-        self.size_y
-    }
-
-    pub fn scale_handeling(&self) -> ScaleHandeling {
-        match self.scale_handeling.as_str() {
-            "ScaleKeepRatio" => ScaleHandeling::ScaleKeepRatio,
-            "ScaleIgnoreRatio" => ScaleHandeling::ScaleIgnoreRatio,
-            "KeepSizeCenter" => ScaleHandeling::KeepSizeCenter,
-            _ => panic!("invalid ScaleHandeling"),
-        }
-    }
-
-    pub fn source(&self) -> Option<&str> {
-        self.source.as_deref()
+    pub fn matrix(&self) -> Option<Matrix4x3> {
+        self.matrix
+            .as_ref()
+            .and_then(|s| Matrix4x3::from_str(s).ok())
     }
 }
 
@@ -281,59 +399,15 @@ impl Layer {
         &self.name
     }
 
-    pub fn matrix(&self) -> Option<Matrix> {
-        self.matrix.as_ref().and_then(|s| Matrix::from_str(s).ok())
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Geometry3D {
-    #[facet(xml::attribute, rename = "fileName")]
-    file_name: String,
-
-    // FIXME: Find a way to serialize the Matrix directly using facet.
-    #[facet(rename = "Matrix")]
-    matrix: Option<String>,
-}
-
-impl Geometry3D {
-    pub fn file_name(&self) -> &str {
-        &self.file_name
-    }
-
-    pub fn matrix(&self) -> Option<Matrix> {
-        self.matrix.as_ref().and_then(|s| Matrix::from_str(s).ok())
-    }
-}
-
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-pub struct Symbol {
-    #[facet(xml::attribute, rename = "uuid")]
-    uuid: Uuid,
-    #[facet(xml::attribute, rename = "symdef", default = "")]
-    symdef: Uuid,
-
-    // FIXME: Find a way to serialize the Matrix directly using facet.
-    #[facet(rename = "Matrix")]
-    matrix: Option<String>,
-}
-
-impl Symbol {
-    pub fn uuid(&self) -> Uuid {
-        self.uuid
-    }
-
-    pub fn symdef(&self) -> Uuid {
-        self.symdef
-    }
-
-    pub fn matrix(&self) -> Option<Matrix> {
-        self.matrix.as_ref().and_then(|s| Matrix::from_str(s).ok())
+    pub fn matrix(&self) -> Option<Matrix4x3> {
+        self.matrix
+            .as_ref()
+            .and_then(|s| Matrix4x3::from_str(s).ok())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, facet::Facet)]
-pub struct Matrix {
+pub struct Matrix4x3 {
     u1: f64,
     u2: f64,
     u3: f64,
@@ -348,7 +422,7 @@ pub struct Matrix {
     o3: f64,
 }
 
-impl FromStr for Matrix {
+impl FromStr for Matrix4x3 {
     type Err = crate::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -386,7 +460,7 @@ impl FromStr for Matrix {
             )));
         }
 
-        Ok(Matrix {
+        Ok(Matrix4x3 {
             u1: values[0],
             u2: values[1],
             u3: values[2],
@@ -403,7 +477,7 @@ impl FromStr for Matrix {
     }
 }
 
-impl fmt::Display for Matrix {
+impl fmt::Display for Matrix4x3 {
     #[rustfmt::skip]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -414,6 +488,76 @@ impl fmt::Display for Matrix {
             self.w1, self.w2, self.w3,
             self.o1, self.o2, self.o3
         )
+    }
+}
+
+#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct SizeX(i64);
+
+impl From<i64> for SizeX {
+    fn from(val: i64) -> Self {
+        SizeX(val)
+    }
+}
+
+impl From<SizeX> for i64 {
+    fn from(val: SizeX) -> i64 {
+        val.0
+    }
+}
+
+impl ops::Deref for SizeX {
+    type Target = i64;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl fmt::Display for SizeX {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl str::FromStr for SizeX {
+    type Err = <i64 as str::FromStr>::Err;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<i64>().map(SizeX)
+    }
+}
+
+#[derive(facet::Facet, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct SizeY(i64);
+
+impl From<i64> for SizeY {
+    fn from(val: i64) -> Self {
+        SizeY(val)
+    }
+}
+
+impl From<SizeY> for i64 {
+    fn from(val: SizeY) -> i64 {
+        val.0
+    }
+}
+
+impl ops::Deref for SizeY {
+    type Target = i64;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl fmt::Display for SizeY {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl str::FromStr for SizeY {
+    type Err = <i64 as str::FromStr>::Err;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse::<i64>().map(SizeY)
     }
 }
 
@@ -430,20 +574,20 @@ mod tests {
             ver_minor: 5,
             provider: "Provider".to_string(),
             provider_version: "Provider Version".to_string(),
-            user_data: Some(UserData {
+            user_data: UserData {
                 data: vec![
                     xml::RawMarkup::from(r#"<Data provider="Data Provider 1" ver="0.1" />"#),
                     xml::RawMarkup::from(
                         r#"<Data provider="Data Provider 2"><VWEntry key="ce7c4eda-1c47-4b41-af56-530116c475b2">Custom Entry</VWEntry></Data>"#,
                     ),
                 ],
-            }),
+            },
             scene: Scene {
-                aux_data: Some(AuxData {
-                    classes: vec![Class {
+                aux_data: AuxData {
+                    class: Some(Class {
                         uuid: Uuid::parse_str("4157c914-094b-4808-87ee-dd7ebd6f9f97").unwrap(),
                         name: "Class Name".to_string(),
-                    }],
+                    }),
                     positions: vec![
                         Position {
                             uuid: Uuid::parse_str("48444956-9b0d-11f0-a3e9-dc567b68abae").unwrap(),
@@ -460,7 +604,7 @@ mod tests {
                             name: "Symdef Name 1".to_string(),
                             child_list: SymdefChildList {
                                 geometry3ds: vec![Geometry3D {
-                                    file_name: "geometry_file.glb".to_string(),
+                                    file_name: FileName::new("geometry_file.glb").unwrap(),
                                     matrix: Some("{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string()),
                                 }],
                                 symbols: vec![],
@@ -471,7 +615,7 @@ mod tests {
                             name: "Symdef Name 2".to_string(),
                             child_list: SymdefChildList {
                                 geometry3ds: vec![Geometry3D {
-                                    file_name: "geometry_file.glb".to_string(),
+                                    file_name: FileName::new("geometry_file.glb").unwrap(),
                                     matrix: None,
                                 }],
                                 symbols: vec![],
@@ -509,12 +653,16 @@ mod tests {
                     mapping_definitions: vec![MappingDefinition {
                         uuid: Uuid::parse_str("bef95eb8-98ac-4217-b10d-fb4b83381398").unwrap(),
                         name: "Mapping Definition Name 1".to_string(),
-                        size_x: 1920,
-                        size_y: 1080,
+                        size_x: SizeX(1920),
+                        size_y: SizeY(1080),
                         scale_handeling: "ScaleIgnoreRatio".to_string(),
-                        source: Some("movie.mov".to_string()),
+                        source: Source {
+                            linked_geometry: "linked_geometry".to_string(),
+                            type_: SourceType::CaptureDevice,
+                            value: "value".to_string(),
+                        },
                     }],
-                }),
+                },
                 layers: Layers { layers: vec![] },
             },
         }
@@ -528,95 +676,89 @@ mod tests {
 
     #[test]
     fn test_load_mvr_header() {
-        let gsd = expected_gsd();
         let loaded = load_gsd();
+        let expected = expected_gsd();
 
-        assert_eq!(loaded.ver_major(), gsd.ver_major());
-        assert_eq!(loaded.ver_minor(), gsd.ver_minor());
-        assert_eq!(loaded.provider(), gsd.provider());
-        assert_eq!(loaded.provider_version(), gsd.provider_version());
+        assert_eq!(loaded.ver_major(), expected.ver_major());
+        assert_eq!(loaded.ver_minor(), expected.ver_minor());
+        assert_eq!(loaded.provider(), expected.provider());
+        assert_eq!(loaded.provider_version(), expected.provider_version());
     }
 
     #[test]
     fn test_load_mvr_user_data() {
-        let gsd = expected_gsd();
         let loaded = load_gsd();
+        let expected = expected_gsd();
 
-        let loaded_user_data = loaded.user_data();
-        let gsd_user_data = gsd.user_data();
-        assert_eq!(loaded_user_data.is_some(), gsd_user_data.is_some());
-        if let (Some(loaded_ud), Some(gsd_ud)) = (loaded_user_data, gsd_user_data) {
-            assert_eq!(loaded_ud.data(), gsd_ud.data());
-        }
+        assert_eq!(loaded.user_data(), expected.user_data());
     }
 
     #[test]
     fn test_load_mvr_aux_data() {
-        let gsd = expected_gsd();
         let loaded = load_gsd();
+        let expected = expected_gsd();
 
-        let loaded_scene = loaded.scene();
-        let gsd_scene = gsd.scene();
+        let loaded_aux = loaded.scene().aux_data();
+        let expected_aux = expected.scene().aux_data();
 
-        let loaded_aux = loaded_scene.aux_data();
-        let gsd_aux = gsd_scene.aux_data();
-        assert_eq!(loaded_aux.is_some(), gsd_aux.is_some());
-        if let (Some(loaded_aux), Some(gsd_aux)) = (loaded_aux, gsd_aux) {
-            // Classes.
-            let loaded_classes = loaded_aux.classes();
-            let gsd_classes = gsd_aux.classes();
-            assert_eq!(loaded_classes.len(), gsd_classes.len());
-            for (a, b) in loaded_classes.iter().zip(gsd_classes.iter()) {
+        // Classes.
+        let loaded_class = loaded_aux.class();
+        let gsd_class = expected_aux.class();
+        match (loaded_class, gsd_class) {
+            (Some(a), Some(b)) => {
                 assert_eq!(a.uuid(), b.uuid());
                 assert_eq!(a.name(), b.name());
             }
-            // Positions.
-            let loaded_positions = loaded_aux.positions();
-            let gsd_positions = gsd_aux.positions();
-            assert_eq!(loaded_positions.len(), gsd_positions.len());
-            for (a, b) in loaded_positions.iter().zip(gsd_positions.iter()) {
-                assert_eq!(a.uuid(), b.uuid());
-                assert_eq!(a.name(), b.name());
-            }
-            // Symdefs.
-            let loaded_symdefs = loaded_aux.symdefs();
-            let gsd_symdefs = gsd_aux.symdefs();
-            assert_eq!(loaded_symdefs.len(), gsd_symdefs.len());
-            for (a, b) in loaded_symdefs.iter().zip(gsd_symdefs.iter()) {
-                assert_eq!(a.uuid(), b.uuid());
-                assert_eq!(a.name(), b.name());
+            (None, None) => {}
+            _ => panic!("Class mismatch"),
+        }
 
-                // Test Geometry3D child list
-                let a_geometry3ds = a.geometry3ds();
-                let b_geometry3ds = b.geometry3ds();
-                assert_eq!(a_geometry3ds.len(), b_geometry3ds.len());
-                for (ag, bg) in a_geometry3ds.iter().zip(b_geometry3ds.iter()) {
-                    assert_eq!(ag.file_name(), bg.file_name());
-                    assert_eq!(ag.matrix(), bg.matrix());
-                }
+        // Positions.
+        let loaded_positions = loaded_aux.positions();
+        let gsd_positions = expected_aux.positions();
+        assert_eq!(loaded_positions.len(), gsd_positions.len());
+        for (a, b) in loaded_positions.iter().zip(gsd_positions.iter()) {
+            assert_eq!(a.uuid(), b.uuid());
+            assert_eq!(a.name(), b.name());
+        }
 
-                // Test Symbol child list
-                let a_symbols = a.symbols();
-                let b_symbols = b.symbols();
-                assert_eq!(a_symbols.len(), b_symbols.len());
-                for (asym, bsym) in a_symbols.iter().zip(b_symbols.iter()) {
-                    assert_eq!(asym.uuid(), bsym.uuid());
-                    assert_eq!(asym.symdef(), bsym.symdef());
-                    assert_eq!(asym.matrix(), bsym.matrix());
-                }
+        // Symdefs.
+        let loaded_symdefs = loaded_aux.symdefs();
+        let gsd_symdefs = expected_aux.symdefs();
+        assert_eq!(loaded_symdefs.len(), gsd_symdefs.len());
+        for (a, b) in loaded_symdefs.iter().zip(gsd_symdefs.iter()) {
+            assert_eq!(a.uuid(), b.uuid());
+            assert_eq!(a.name(), b.name());
+
+            let a_geometry3ds = a.geometry3ds();
+            let b_geometry3ds = b.geometry3ds();
+            assert_eq!(a_geometry3ds.len(), b_geometry3ds.len());
+            for (ag, bg) in a_geometry3ds.iter().zip(b_geometry3ds.iter()) {
+                assert_eq!(ag.file_name(), bg.file_name());
+                assert_eq!(ag.matrix(), bg.matrix());
             }
-            // Mapping Definitions.
-            let loaded_maps = loaded_aux.mapping_definitions();
-            let gsd_maps = gsd_aux.mapping_definitions();
-            assert_eq!(loaded_maps.len(), gsd_maps.len());
-            for (a, b) in loaded_maps.iter().zip(gsd_maps.iter()) {
-                assert_eq!(a.uuid(), b.uuid());
-                assert_eq!(a.name(), b.name());
-                assert_eq!(a.size_x(), b.size_x());
-                assert_eq!(a.size_y(), b.size_y());
-                assert_eq!(a.scale_handeling(), b.scale_handeling());
-                assert_eq!(a.source(), b.source());
+
+            let a_symbols = a.symbols();
+            let b_symbols = b.symbols();
+            assert_eq!(a_symbols.len(), b_symbols.len());
+            for (asym, bsym) in a_symbols.iter().zip(b_symbols.iter()) {
+                assert_eq!(asym.uuid(), bsym.uuid());
+                assert_eq!(asym.symdef(), bsym.symdef());
+                assert_eq!(asym.matrix(), bsym.matrix());
             }
+        }
+
+        // Mapping Definitions.
+        let loaded_maps = loaded_aux.mapping_definitions();
+        let gsd_maps = expected_aux.mapping_definitions();
+        assert_eq!(loaded_maps.len(), gsd_maps.len());
+        for (a, b) in loaded_maps.iter().zip(gsd_maps.iter()) {
+            assert_eq!(a.uuid(), b.uuid());
+            assert_eq!(a.name(), b.name());
+            assert_eq!(a.size_x(), b.size_x());
+            assert_eq!(a.size_y(), b.size_y());
+            assert_eq!(a.scale_handeling(), b.scale_handeling());
+            assert_eq!(a.source(), b.source());
         }
     }
 
@@ -642,7 +784,7 @@ mod tests {
     #[test]
     fn test_parse_matrix() {
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12}";
-        let m = Matrix::from_str(s).unwrap();
+        let m = Matrix4x3::from_str(s).unwrap();
         assert_eq!(m.u1, 1.0);
         assert_eq!(m.u2, 2.0);
         assert_eq!(m.u3, 3.0);
@@ -657,7 +799,7 @@ mod tests {
         assert_eq!(m.o3, 12.0);
 
         let s = " { 1 , 2 , 3 } { 4 , 5 , 6 } { 7 , 8 , 9 } { 10 , 11 , 12 } ";
-        let m = Matrix::from_str(s).unwrap();
+        let m = Matrix4x3::from_str(s).unwrap();
         assert_eq!(m.u1, 1.0);
         assert_eq!(m.u2, 2.0);
         assert_eq!(m.u3, 3.0);
@@ -672,22 +814,22 @@ mod tests {
         assert_eq!(m.o3, 12.0);
 
         let s = "{1,2,3}{4,5,6}{7,8,9}";
-        assert!(Matrix::from_str(s).is_err());
+        assert!(Matrix4x3::from_str(s).is_err());
 
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12,13}";
-        assert!(Matrix::from_str(s).is_err());
+        assert!(Matrix4x3::from_str(s).is_err());
 
         let s = "{1,2,foo}{4,5,6}{7,8,9}{10,11,12}";
-        assert!(Matrix::from_str(s).is_err());
+        assert!(Matrix4x3::from_str(s).is_err());
 
         let s = "{1,2,3}{4,5,6}{7,8,9{10,11,12}";
-        assert!(Matrix::from_str(s).is_err());
+        assert!(Matrix4x3::from_str(s).is_err());
     }
 
     #[test]
     #[rustfmt::skip]
     fn test_display_matrix() {
-        let m = Matrix {
+        let m = Matrix4x3 {
             u1: 1.0,  u2: 2.0,  u3: 3.0,
             v1: 4.0,  v2: 5.0,  v3: 6.0,
             w1: 7.0,  w2: 8.0,  w3: 9.0,
@@ -696,7 +838,7 @@ mod tests {
         let s = m.to_string();
         assert_eq!(s, "{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string());
 
-        let m2 = Matrix::from_str(&s).unwrap();
+        let m2 = Matrix4x3::from_str(&s).unwrap();
         assert_eq!(m2.u1, 1.0);
         assert_eq!(m2.u2, 2.0);
         assert_eq!(m2.u3, 3.0);

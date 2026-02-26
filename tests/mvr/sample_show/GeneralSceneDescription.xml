@@ -34,7 +34,9 @@
       <SizeX>1920</SizeX>
       <SizeY>1080</SizeY>
       <ScaleHandeling>ScaleIgnoreRatio</ScaleHandeling>
-      movie.mov
+      <Source linkedGeometry="linked_geometry" type="CaptureDevice">
+        value
+      </Source>
     </MappingDefinition>
   </AUXData>
     <Layers>
