@@ -1,0 +1,12 @@
+[package]
+name = "mvr-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+facet = { version = "0.43.2", features = ["uuid"] }
+facet-value = "0.43.2"
+facet-xml = "0.43.1"
+thiserror = "2.0.18"
+uuid = { version = "1.21.0", features = ["v4"] }
+zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
