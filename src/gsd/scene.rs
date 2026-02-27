@@ -1,10 +1,12 @@
 use crate::{AuxData, Layer, Layers};
 
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "Scene")]
 pub struct Scene {
-    #[facet(rename = "AUXData", default)]
+    #[serde(rename = "AUXData", default)]
     pub(crate) aux_data: AuxData,
-    #[facet(rename = "Layers", default)]
+    #[serde(rename = "Layers", default)]
     pub(crate) layers: Layers,
 }
 
@@ -18,18 +20,20 @@ impl Scene {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, facet::Facet)]
-pub struct Matrix4x3 {
-    pub(crate) u1: f64,
-    pub(crate) u2: f64,
-    pub(crate) u3: f64,
-    pub(crate) v1: f64,
-    pub(crate) v2: f64,
-    pub(crate) v3: f64,
-    pub(crate) w1: f64,
-    pub(crate) w2: f64,
-    pub(crate) w3: f64,
-    pub(crate) o1: f64,
-    pub(crate) o2: f64,
-    pub(crate) o3: f64,
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scene_deserialize() {
+        let xml = r#"
+            <Scene>
+                <AUXData></AUXData>
+                <Layers></Layers>
+            </Scene>
+        "#;
+        let scene: Scene = quick_xml::de::from_str(xml).expect("Should deserialize");
+        assert_eq!(scene.aux_data(), &AuxData::default());
+        assert_eq!(scene.layers().len(), 0);
+    }
 }

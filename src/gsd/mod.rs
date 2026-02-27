@@ -3,7 +3,7 @@ use std::{
     str::{self, FromStr},
 };
 
-use facet_xml as xml;
+use crate::FileName;
 
 mod aux_data;
 mod layers;
@@ -15,21 +15,22 @@ pub use layers::*;
 pub use scene::*;
 pub use user_data::*;
 
-#[derive(facet::Facet, Debug, Clone, PartialEq)]
-#[facet(rename = "GeneralSceneDescription")]
+#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "GeneralSceneDescription")]
 pub struct GeneralSceneDescription {
-    #[facet(xml::attribute, rename = "verMajor")]
+    #[serde(rename = "@verMajor")]
     pub(crate) ver_major: i64,
-    #[facet(xml::attribute, rename = "verMinor")]
+    #[serde(rename = "@verMinor")]
     pub(crate) ver_minor: i64,
-    #[facet(xml::attribute, rename = "provider", default = "")]
-    pub(crate) provider: String,
-    #[facet(xml::attribute, rename = "providerVersion", default = "")]
-    pub(crate) provider_version: String,
+    #[serde(rename = "@provider", default)]
+    pub(crate) provider: Option<String>,
+    #[serde(rename = "@providerVersion", default)]
+    pub(crate) provider_version: Option<String>,
 
-    #[facet(rename = "UserData", default)]
+    #[serde(rename = "UserData", default)]
     pub(crate) user_data: UserData,
-    #[facet(rename = "Scene", default)]
+    #[serde(rename = "Scene", default)]
     pub(crate) scene: Scene,
 }
 
@@ -42,12 +43,12 @@ impl GeneralSceneDescription {
         self.ver_minor
     }
 
-    pub fn provider(&self) -> &str {
-        &self.provider
+    pub fn provider(&self) -> Option<&str> {
+        self.provider.as_deref()
     }
 
-    pub fn provider_version(&self) -> &str {
-        &self.provider_version
+    pub fn provider_version(&self) -> Option<&str> {
+        self.provider_version.as_deref()
     }
 
     pub fn user_data(&self) -> &UserData {
@@ -57,6 +58,24 @@ impl GeneralSceneDescription {
     pub fn scene(&self) -> &Scene {
         &self.scene
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "Matrix", try_from = "String", into = "String")]
+pub struct Matrix4x3 {
+    pub(crate) u1: f64,
+    pub(crate) u2: f64,
+    pub(crate) u3: f64,
+    pub(crate) v1: f64,
+    pub(crate) v2: f64,
+    pub(crate) v3: f64,
+    pub(crate) w1: f64,
+    pub(crate) w2: f64,
+    pub(crate) w3: f64,
+    pub(crate) o1: f64,
+    pub(crate) o2: f64,
+    pub(crate) o3: f64,
 }
 
 impl FromStr for Matrix4x3 {
@@ -69,9 +88,7 @@ impl FromStr for Matrix4x3 {
         for group in &mut groups {
             rest = rest.trim_start();
             if !rest.starts_with('{') {
-                return Err(crate::Error::MatrixParseError(
-                    "Missing opening brace".into(),
-                ));
+                return Err(crate::Error::MatrixParseError("Missing opening brace".into()));
             }
             rest = &rest[1..];
 
@@ -84,9 +101,7 @@ impl FromStr for Matrix4x3 {
 
             let parts: Vec<&str> = content.split(',').collect();
             if parts.len() != 3 {
-                return Err(crate::Error::MatrixParseError(
-                    "Expected 3 items per group".into(),
-                ));
+                return Err(crate::Error::MatrixParseError("Expected 3 items per group".into()));
             }
 
             for (i, part) in parts.iter().enumerate() {
@@ -132,229 +147,100 @@ impl fmt::Display for Matrix4x3 {
     }
 }
 
+pub(crate) fn deserialize_matrix_option<'de, D>(
+    deserializer: D,
+) -> Result<Option<Matrix4x3>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize as _;
+    match Option::<Matrix4x3>::deserialize(deserializer) {
+        Ok(val) => Ok(val),
+        Err(_) => Ok(None),
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
+impl From<Matrix4x3> for String {
+    fn from(matrix: Matrix4x3) -> Self {
+        matrix.to_string()
+    }
+}
+
+#[cfg(not(tarpaulin_include))]
+impl TryFrom<String> for Matrix4x3 {
+    type Error = crate::Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Matrix4x3::from_str(&value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "Gobo")]
+pub struct Gobo {
+    #[serde(rename = "@rotation", default = "default_rotation")]
+    pub(crate) rotation: f64,
+
+    #[serde(rename = "$value")]
+    pub(crate) file_name: FileName,
+}
+
+fn default_rotation() -> f64 {
+    0.0
+}
+
+impl Gobo {
+    pub fn rotation(&self) -> f64 {
+        self.rotation
+    }
+
+    pub fn file_name(&self) -> &FileName {
+        &self.file_name
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use uuid::Uuid;
-
     use super::*;
-    use crate::{FileName, MvrFile};
-
-    fn expected_gsd() -> GeneralSceneDescription {
-        GeneralSceneDescription {
-            ver_major: 1,
-            ver_minor: 5,
-            provider: "Provider".to_string(),
-            provider_version: "Provider Version".to_string(),
-            user_data: UserData {
-                data: vec![
-                    xml::RawMarkup::from(r#"<Data provider="Data Provider 1" ver="0.1" />"#),
-                    xml::RawMarkup::from(
-                        r#"<Data provider="Data Provider 2"><VWEntry key="ce7c4eda-1c47-4b41-af56-530116c475b2">Custom Entry</VWEntry></Data>"#,
-                    ),
-                ],
-            },
-            scene: Scene {
-                aux_data: AuxData {
-                    class: Some(Class {
-                        uuid: Uuid::parse_str("4157c914-094b-4808-87ee-dd7ebd6f9f97").unwrap(),
-                        name: "Class Name".to_string(),
-                    }),
-                    positions: vec![
-                        Position {
-                            uuid: Uuid::parse_str("48444956-9b0d-11f0-a3e9-dc567b68abae").unwrap(),
-                            name: "Position Name 1".to_string(),
-                        },
-                        Position {
-                            uuid: Uuid::parse_str("56b76b02-14ee-4309-bd58-0961493e93e3").unwrap(),
-                            name: "".to_string(),
-                        },
-                    ],
-                    symdefs: vec![
-                        Symdef {
-                            uuid: Uuid::parse_str("317a5549-659d-42a8-9cdb-5e1a411560c1").unwrap(),
-                            name: "Symdef Name 1".to_string(),
-                            child_list: SymdefChildList {
-                                geometry3ds: vec![Geometry3D {
-                                    file_name: FileName::new("geometry_file.glb").unwrap(),
-                                    matrix: Some("{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string()),
-                                }],
-                                symbols: vec![],
-                            },
-                        },
-                        Symdef {
-                            uuid: Uuid::parse_str("0584afe1-2cbc-4a98-b5d2-2261aafdbdbb").unwrap(),
-                            name: "Symdef Name 2".to_string(),
-                            child_list: SymdefChildList {
-                                geometry3ds: vec![Geometry3D {
-                                    file_name: FileName::new("geometry_file.glb").unwrap(),
-                                    matrix: None,
-                                }],
-                                symbols: vec![],
-                            },
-                        },
-                        Symdef {
-                            uuid: Uuid::parse_str("0f76c345-0f3f-4251-8e19-8dc0690ffd6f").unwrap(),
-                            name: "Symdef Name 3".to_string(),
-                            child_list: SymdefChildList {
-                                geometry3ds: vec![],
-                                symbols: vec![Symbol {
-                                    uuid: Uuid::parse_str("4de1d6e2-5437-4ec3-949e-2065cb4fbfce")
-                                        .unwrap(),
-                                    symdef: Uuid::parse_str("4dd4be9e-ba5c-4ffb-90be-0419b4d977a4")
-                                        .unwrap(),
-                                    matrix: None,
-                                }],
-                            },
-                        },
-                        Symdef {
-                            uuid: Uuid::parse_str("a1907a3e-16c1-4702-984a-9de0b41adff4").unwrap(),
-                            name: "".to_string(),
-                            child_list: SymdefChildList {
-                                geometry3ds: vec![],
-                                symbols: vec![Symbol {
-                                    uuid: Uuid::parse_str("f7199cb8-e6f9-493d-8d52-7cf529453fc4")
-                                        .unwrap(),
-                                    symdef: Uuid::parse_str("aa517032-d1f1-40d4-b14d-63ed6527349f")
-                                        .unwrap(),
-                                    matrix: Some("{1,2,3}{4,5,6}{7,8,9}{10,11,12}".to_string()),
-                                }],
-                            },
-                        },
-                    ],
-                    mapping_definitions: vec![MappingDefinition {
-                        uuid: Uuid::parse_str("bef95eb8-98ac-4217-b10d-fb4b83381398").unwrap(),
-                        name: "Mapping Definition Name 1".to_string(),
-                        size_x: SizeX(1920),
-                        size_y: SizeY(1080),
-                        scale_handeling: "ScaleIgnoreRatio".to_string(),
-                        source: Source {
-                            linked_geometry: "linked_geometry".to_string(),
-                            type_: SourceType::CaptureDevice,
-                            value: "value".to_string(),
-                        },
-                    }],
-                },
-                layers: Layers { layers: vec![] },
-            },
-        }
-    }
-
-    fn load_gsd() -> GeneralSceneDescription {
-        MvrFile::load_from_file("tests/mvr/sample_show.mvr")
-            .expect("Should load MvrFile")
-            .general_scene_description
-    }
 
     #[test]
-    fn test_load_mvr_header() {
-        let loaded = load_gsd();
-        let expected = expected_gsd();
+    fn test_deserialize_gsd() {
+        let xml = r#"
+            <GeneralSceneDescription provider="Provider" providerVersion="Provider Version" verMajor="1" verMinor="5">
+                <UserData>
+                    <Data provider="Data Provider 1" ver="0.1" />
+                </UserData>
+                <Scene>
+                    <AUXData>
+                        <Class name="Class 1" uuid="4157c914-094b-4808-87ee-dd7ebd6f9f97" />
+                    </AUXData>
+                    <Layers>
+                        <Layer name="Layer 1" uuid="7bfe64c8-8a96-402b-a1dc-85395f93890b" />
+                    </Layers>
+                </Scene>
+            </GeneralSceneDescription>
+        "#;
 
-        assert_eq!(loaded.ver_major(), expected.ver_major());
-        assert_eq!(loaded.ver_minor(), expected.ver_minor());
-        assert_eq!(loaded.provider(), expected.provider());
-        assert_eq!(loaded.provider_version(), expected.provider_version());
-    }
+        let gsd: GeneralSceneDescription = quick_xml::de::from_str(xml).unwrap();
+        let user_data = gsd.user_data();
+        let user_data_entries = user_data.data();
+        let scene = gsd.scene();
+        let aux_data = scene.aux_data();
+        let class = &aux_data.classes()[0];
+        let layers = scene.layers();
 
-    #[test]
-    fn test_load_mvr_user_data() {
-        let loaded = load_gsd();
-        let expected = expected_gsd();
-
-        assert_eq!(loaded.user_data().data(), expected.user_data().data());
-    }
-
-    #[test]
-    fn test_load_mvr_aux_data() {
-        let loaded = load_gsd();
-        let expected = expected_gsd();
-
-        let loaded_aux = loaded.scene().aux_data();
-        let expected_aux = expected.scene().aux_data();
-
-        // Classes.
-        let loaded_class = loaded_aux.class();
-        let gsd_class = expected_aux.class();
-        match (loaded_class, gsd_class) {
-            (Some(a), Some(b)) => {
-                assert_eq!(a.uuid(), b.uuid());
-                assert_eq!(a.name(), b.name());
-            }
-            (None, None) => {}
-            _ => panic!("Class mismatch"),
-        }
-
-        // Positions.
-        let loaded_positions = loaded_aux.positions();
-        let gsd_positions = expected_aux.positions();
-        assert_eq!(loaded_positions.len(), gsd_positions.len());
-        for (a, b) in loaded_positions.iter().zip(gsd_positions.iter()) {
-            assert_eq!(a.uuid(), b.uuid());
-            assert_eq!(a.name(), b.name());
-        }
-
-        // Symdefs.
-        let loaded_symdefs = loaded_aux.symdefs();
-        let gsd_symdefs = expected_aux.symdefs();
-        assert_eq!(loaded_symdefs.len(), gsd_symdefs.len());
-        for (a, b) in loaded_symdefs.iter().zip(gsd_symdefs.iter()) {
-            assert_eq!(a.uuid(), b.uuid());
-            assert_eq!(a.name(), b.name());
-
-            let a_geometry3ds = a.geometry3ds();
-            let b_geometry3ds = b.geometry3ds();
-            assert_eq!(a_geometry3ds.len(), b_geometry3ds.len());
-            for (ag, bg) in a_geometry3ds.iter().zip(b_geometry3ds.iter()) {
-                assert_eq!(ag.file_name(), bg.file_name());
-                assert_eq!(ag.matrix(), bg.matrix());
-            }
-
-            let a_symbols = a.symbols();
-            let b_symbols = b.symbols();
-            assert_eq!(a_symbols.len(), b_symbols.len());
-            for (asym, bsym) in a_symbols.iter().zip(b_symbols.iter()) {
-                assert_eq!(asym.uuid(), bsym.uuid());
-                assert_eq!(asym.symdef(), bsym.symdef());
-                assert_eq!(asym.matrix(), bsym.matrix());
-            }
-        }
-
-        // Mapping Definitions.
-        let loaded_maps = loaded_aux.mapping_definitions();
-        let gsd_maps = expected_aux.mapping_definitions();
-        assert_eq!(loaded_maps.len(), gsd_maps.len());
-        for (a, b) in loaded_maps.iter().zip(gsd_maps.iter()) {
-            assert_eq!(a.uuid(), b.uuid());
-            assert_eq!(a.name(), b.name());
-            assert_eq!(a.size_x(), b.size_x());
-            assert_eq!(a.size_y(), b.size_y());
-            assert_eq!(a.scale_handeling(), b.scale_handeling());
-
-            assert_eq!(a.source().linked_geometry(), b.source().linked_geometry());
-            assert_eq!(a.source().type_(), b.source().type_());
-            assert_eq!(a.source().value(), b.source().value());
-        }
-    }
-
-    #[test]
-    #[ignore]
-    fn test_load_mvr_layers() {
-        let gsd = expected_gsd();
-        let loaded = load_gsd();
-
-        let loaded_scene = loaded.scene();
-        let gsd_scene = gsd.scene();
-
-        let loaded_layers = loaded_scene.layers();
-        let gsd_layers = gsd_scene.layers();
-        assert_eq!(loaded_layers.len(), gsd_layers.len());
-        for (a, b) in loaded_layers.iter().zip(gsd_layers.iter()) {
-            assert_eq!(a.uuid(), b.uuid());
-            assert_eq!(a.name(), b.name());
-            assert_eq!(a.matrix(), b.matrix());
-        }
+        assert_eq!(gsd.ver_major(), 1);
+        assert_eq!(gsd.ver_minor(), 5);
+        assert_eq!(gsd.provider(), Some("Provider"));
+        assert_eq!(gsd.provider_version(), Some("Provider Version"));
+        assert_eq!(user_data_entries.len(), 1);
+        assert_eq!(user_data_entries[0].provider(), "Data Provider 1");
+        assert_eq!(user_data_entries[0].ver(), Some("0.1"));
+        assert_eq!(class.name(), "Class 1");
+        assert_eq!(class.uuid().to_string(), "4157c914-094b-4808-87ee-dd7ebd6f9f97");
+        assert_eq!(layers[0].name(), "Layer 1");
     }
 
     #[test]
@@ -390,76 +276,40 @@ mod tests {
         assert_eq!(m.o3, 12.0);
 
         let s = "";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "    ";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{}{}{}{}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,3}{}{7,8,9}{10,11,12}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,3}{4,5,6}{7,8,9}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12,13}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,foo}{4,5,6}{7,8,9}{10,11,12}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,3}{4,5,6}{7,8,9{10,11,12}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "1,2,3,4,5,6,7,8,9,10,11,12";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,3}4,5,6}{7,8,9}{10,11,12}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
 
         let s = "{1,2,3}{4,5,6}{7,8,9}{10,11,12}}";
-        assert!(matches!(
-            Matrix4x3::from_str(s),
-            Err(crate::Error::MatrixParseError(_))
-        ));
+        assert!(matches!(Matrix4x3::from_str(s), Err(crate::Error::MatrixParseError(_))));
     }
 
     #[test]

@@ -1,5 +1,7 @@
 use std::{fs::File, io::Read as _, path::Path};
 
+use zip::ZipArchive;
+
 mod error;
 mod gsd;
 mod value;
@@ -7,8 +9,6 @@ mod value;
 pub use error::*;
 pub use gsd::*;
 pub use value::*;
-
-use zip::ZipArchive;
 
 pub struct MvrFile {
     general_scene_description: GeneralSceneDescription,
@@ -23,11 +23,7 @@ impl MvrFile {
         let mut zip = load_zip(path)?;
         let general_scene_description = load_general_scene_description(&mut zip)?;
 
-        Ok(Self {
-            general_scene_description,
-            gdtf_files: Vec::new(),
-            resources: Vec::new(),
-        })
+        Ok(Self { general_scene_description, gdtf_files: Vec::new(), resources: Vec::new() })
     }
 
     pub fn general_scene_description(&self) -> &GeneralSceneDescription {
@@ -44,15 +40,11 @@ impl MvrFile {
 }
 
 fn load_zip(path: &Path) -> Result<ZipArchive<File>, crate::Error> {
-    let archive = File::open(path).map_err(|e| crate::Error::OpenArchive {
-        source: e,
-        path: path.to_path_buf(),
-    })?;
+    let archive = File::open(path)
+        .map_err(|e| crate::Error::OpenArchive { source: e, path: path.to_path_buf() })?;
 
-    let zip = zip::ZipArchive::new(archive).map_err(|e| crate::Error::UnzipArchive {
-        source: e,
-        path: path.to_path_buf(),
-    })?;
+    let zip = zip::ZipArchive::new(archive)
+        .map_err(|e| crate::Error::UnzipArchive { source: e, path: path.to_path_buf() })?;
 
     Ok(zip)
 }
@@ -66,10 +58,10 @@ fn load_general_scene_description(
         .by_name(FILE_NAME)
         .map_err(|e| crate::Error::MissingGeneralSceneDescriptionXml { source: e })?;
 
-    let mut xml_content = Vec::new();
-    xml_file.read_to_end(&mut xml_content)?;
+    let mut xml_string = String::new();
+    xml_file.read_to_string(&mut xml_string)?;
 
-    let gsd = facet_xml::from_slice(&xml_content)
+    let gsd = quick_xml::de::from_str(&xml_string)
         .map_err(|e| crate::Error::ParseGeneralSceneDescription { source: e })?;
 
     Ok(gsd)
