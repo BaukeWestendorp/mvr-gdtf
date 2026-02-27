@@ -40,6 +40,14 @@ pub struct Layer {
     pub(crate) child_list: LayerChildList,
 }
 
+impl ops::Deref for Layer {
+    type Target = LayerChildList;
+
+    fn deref(&self) -> &Self::Target {
+        &self.child_list
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename = "LayerChildList")]
@@ -60,6 +68,12 @@ pub struct LayerChildList {
     //        video_screens: Vec<VideoScreen>,
     // FIXME: #[serde(rename = "Projector", default)]
     //        projectors: Vec<Projector>,
+}
+
+impl LayerChildList {
+    pub fn fixtures(&self) -> &[Fixture] {
+        &self.fixtures
+    }
 }
 
 impl Layer {

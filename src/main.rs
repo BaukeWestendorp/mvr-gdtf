@@ -10,5 +10,23 @@ fn main() {
     };
 
     let mvr_file = MvrFile::load_from_file(file_path).unwrap();
-    println!("{:#?}", mvr_file.general_scene_description());
+    let mut fixtures: Vec<_> = mvr_file
+        .general_scene_description()
+        .scene()
+        .layers()
+        .iter()
+        .flat_map(|l| l.fixtures())
+        .collect();
+
+    fixtures.sort_by_key(|fixture| fixture.fixture_id());
+
+    for fixture in fixtures {
+        println!(
+            "{:?}\t{:?}\t{:?}\t{}",
+            fixture.fixture_id(),
+            fixture.fixture_id_numeric(),
+            fixture.unit_number(),
+            fixture.name().to_string()
+        );
+    }
 }
