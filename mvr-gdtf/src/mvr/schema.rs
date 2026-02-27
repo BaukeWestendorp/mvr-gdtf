@@ -418,8 +418,8 @@ pub struct Projector {
     pub overwrites: ::core::option::Option<Overwrites>,
     #[serde(default, rename = "Connections")]
     pub connections: ::core::option::Option<Connections>,
-    #[serde(rename = "ChildList")]
-    pub child_list: ::std::boxed::Box<ChildList>,
+    #[serde(default, rename = "ChildList")]
+    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
     #[serde(rename = "FixtureID")]
     pub fixture_id: ::std::string::String,
     #[serde(default, rename = "FixtureIDNumeric")]
@@ -492,10 +492,10 @@ impl ScaleHandeling {
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Scene {
-    #[serde(rename = "Layers")]
-    pub layers: Layers,
     #[serde(default, rename = "AUXData")]
     pub aux_data: ::core::option::Option<AuxData>,
+    #[serde(rename = "Layers")]
+    pub layers: Layers,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SceneObject {
@@ -503,6 +503,8 @@ pub struct SceneObject {
     pub uuid: ::std::string::String,
     #[serde(default = "SceneObject::default_name", rename = "@name")]
     pub name: ::std::string::String,
+    #[serde(default = "SceneObject::default_multipatch", rename = "@multipatch")]
+    pub multipatch: ::std::string::String,
     #[serde(default, rename = "Matrix")]
     pub matrix: ::core::option::Option<::std::string::String>,
     #[serde(default, rename = "Classing")]
@@ -543,6 +545,10 @@ pub struct SceneObject {
 impl SceneObject {
     #[must_use]
     pub fn default_name() -> ::std::string::String {
+        ::std::string::String::from("")
+    }
+    #[must_use]
+    pub fn default_multipatch() -> ::std::string::String {
         ::std::string::String::from("")
     }
 }
@@ -619,8 +625,8 @@ pub struct Support {
     pub custom_id_type: ::core::option::Option<::core::primitive::i32>,
     #[serde(default, rename = "CustomId")]
     pub custom_id: ::core::option::Option<::core::primitive::i32>,
-    #[serde(rename = "ChildList")]
-    pub child_list: ::std::boxed::Box<ChildList>,
+    #[serde(default, rename = "ChildList")]
+    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
 }
 impl Support {
     #[must_use]
@@ -710,8 +716,8 @@ pub struct Truss {
     pub connections: ::core::option::Option<Connections>,
     #[serde(default, rename = "ChildPosition")]
     pub child_position: ::core::option::Option<::std::string::String>,
-    #[serde(rename = "ChildList")]
-    pub child_list: ::std::boxed::Box<ChildList>,
+    #[serde(default, rename = "ChildList")]
+    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
     #[serde(rename = "FixtureID")]
     pub fixture_id: ::std::string::String,
     #[serde(default, rename = "FixtureIDNumeric")]
@@ -774,8 +780,8 @@ pub struct VideoScreen {
     pub overwrites: ::core::option::Option<Overwrites>,
     #[serde(default, rename = "Connections")]
     pub connections: ::core::option::Option<Connections>,
-    #[serde(rename = "ChildList")]
-    pub child_list: ::std::boxed::Box<ChildList>,
+    #[serde(default, rename = "ChildList")]
+    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
     #[serde(rename = "FixtureID")]
     pub fixture_id: ::std::string::String,
     #[serde(default, rename = "FixtureIDNumeric")]
@@ -799,29 +805,10 @@ impl VideoScreen {
         ::std::string::String::from("")
     }
 }
-#[derive(Debug, Deserialize, Serialize)]
-pub enum YesNoEnum {
-    #[serde(rename = "Yes")]
-    Yes,
-    #[serde(rename = "No")]
-    No,
-}
 pub type Ciecolortype = ::std::string::String;
-pub type Dataversion = ::core::primitive::f32;
-pub type Dmxaddresstype = ::core::primitive::i32;
-pub type Dmxbreaktype = ::std::string::String;
-pub type Dmxtype = ::std::string::String;
-pub type Featuretype = ::std::string::String;
 pub type Guidtype = ::std::string::String;
-pub type Hextype = ::std::string::String;
 pub type Matrixtype = ::std::string::String;
-pub type Nametype = ::std::string::String;
-pub type Nodetype = ::std::string::String;
-pub type Offsettype = ::std::string::String;
-pub type Physicaltype = ::core::primitive::f32;
-pub type Positivefloat = ::core::primitive::f32;
 pub type Positiveinteger = ::core::primitive::i32;
-pub type Rotationtype = ::std::string::String;
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Scaleenum {
     #[serde(rename = "ScaleKeepRatio")]
@@ -831,7 +818,6 @@ pub enum Scaleenum {
     #[serde(rename = "KeepSizeCenter")]
     KeepSizeCenter,
 }
-pub type Twoarray = ::std::string::String;
 pub mod xs {
     use serde::{Deserialize, Serialize};
     #[derive(Debug, Default, Deserialize, Serialize)]

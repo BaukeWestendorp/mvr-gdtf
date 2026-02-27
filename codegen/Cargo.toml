@@ -1,0 +1,11 @@
+[package]
+name = "codegen"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+quote = "1.0.44"
+xsd-parser = "1.4.0"
+
+[lints]
+workspace = true

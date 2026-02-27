@@ -1,5 +1,3 @@
-#![allow(missing_docs)]
-
 use std::{
     fs::write,
     io::Write as _,
@@ -17,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = Config::default().with_serde_quick_xml();
     config.parser.resolver = vec![Resolver::File];
     config.parser.flags = ParserFlags::all();
-    config.parser.schemas = vec![Schema::File("schema/mvr.xsd".into())];
+    config.parser.schemas = vec![Schema::File("codegen/schema/mvr.xsd".into())];
     config.interpreter.flags = InterpreterFlags::all() - InterpreterFlags::WITH_NUM_BIG_INT;
     config.optimizer.flags = OptimizerFlags::all();
     config.generator.flags = GeneratorFlags::all();
@@ -32,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     code = rustfmt_pretty_print(code)?;
 
-    write("src/mvr/schema.rs", code)?;
+    write("mvr-gdtf/src/mvr/schema.rs", code)?;
 
     Ok(())
 }
