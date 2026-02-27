@@ -2,13 +2,13 @@ use std::{fs::File, io::Read as _, path::Path};
 
 use zip::ZipArchive;
 
+use crate::mvr::GeneralSceneDescription;
+
+pub mod mvr;
+
 mod error;
-mod gsd;
-mod value;
 
 pub use error::*;
-pub use gsd::*;
-pub use value::*;
 
 pub struct MvrFile {
     general_scene_description: GeneralSceneDescription,
