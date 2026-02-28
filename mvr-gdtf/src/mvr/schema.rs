@@ -2,75 +2,75 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AuxData {
     #[serde(default, rename = "Class")]
-    pub class: ::std::vec::Vec<BasicChildListAttribute>,
+    pub class: Vec<BasicChildListAttribute>,
     #[serde(default, rename = "Symdef")]
-    pub symdef: ::std::vec::Vec<Symdef>,
+    pub symdef: Vec<Symdef>,
     #[serde(default, rename = "Position")]
-    pub position: ::std::vec::Vec<BasicChildListAttribute>,
+    pub position: Vec<BasicChildListAttribute>,
     #[serde(default, rename = "MappingDefinition")]
-    pub mapping_definition: ::std::vec::Vec<MappingDefinition>,
+    pub mapping_definition: Vec<MappingDefinition>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Address {
     #[serde(default = "Address::default_break_", rename = "@break")]
-    pub break_: ::core::primitive::i32,
+    pub break_: i32,
     #[serde(rename = "$text")]
-    pub content: ::core::primitive::i32,
+    pub content: i32,
 }
 impl Address {
     #[must_use]
-    pub fn default_break_() -> ::core::primitive::i32 {
+    pub fn default_break_() -> i32 {
         0i32
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Addresses {
     #[serde(default, rename = "Address")]
-    pub address: ::std::vec::Vec<Address>,
+    pub address: Vec<Address>,
     #[serde(default, rename = "Network")]
-    pub network: ::std::vec::Vec<Network>,
+    pub network: Vec<Network>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Alignment {
     #[serde(default, rename = "@geometry")]
-    pub geometry: ::core::option::Option<::std::string::String>,
+    pub geometry: Option<String>,
     #[serde(default = "Alignment::default_up", rename = "@up")]
-    pub up: ::std::string::String,
+    pub up: String,
     #[serde(default = "Alignment::default_direction", rename = "@direction")]
-    pub direction: ::std::string::String,
+    pub direction: String,
 }
 impl Alignment {
     #[must_use]
-    pub fn default_up() -> ::std::string::String {
-        ::std::string::String::from("0,0,1")
+    pub fn default_up() -> String {
+        String::from("0,0,1")
     }
     #[must_use]
-    pub fn default_direction() -> ::std::string::String {
-        ::std::string::String::from("0,0,-1")
+    pub fn default_direction() -> String {
+        String::from("0,0,-1")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Alignments {
     #[serde(default, rename = "Alignment")]
-    pub alignment: ::std::vec::Vec<Alignment>,
+    pub alignment: Vec<Alignment>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BasicChildListAttribute {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "BasicChildListAttribute::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
 }
 impl BasicChildListAttribute {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ChildList {
     #[serde(default, rename = "$value")]
-    pub content: ::std::vec::Vec<ChildListContent>,
+    pub content: Vec<ChildListContent>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ChildListContent {
@@ -94,390 +94,390 @@ pub enum ChildListContent {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Connection {
     #[serde(rename = "@own")]
-    pub own: ::std::string::String,
+    pub own: String,
     #[serde(rename = "@other")]
-    pub other: ::std::string::String,
+    pub other: String,
     #[serde(rename = "@toObject")]
-    pub to_object: ::std::string::String,
+    pub to_object: String,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Connections {
     #[serde(default, rename = "Connection")]
-    pub connection: ::std::vec::Vec<Connection>,
+    pub connection: Vec<Connection>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CustomCommands {
     #[serde(default, rename = "CustomCommand")]
-    pub custom_command: ::std::vec::Vec<::std::string::String>,
+    pub custom_command: Vec<String>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Data {
     #[serde(rename = "@provider")]
-    pub provider: ::std::string::String,
+    pub provider: String,
     #[serde(default = "Data::default_ver", rename = "@ver")]
-    pub ver: ::std::string::String,
+    pub ver: String,
 }
 impl Data {
     #[must_use]
-    pub fn default_ver() -> ::std::string::String {
-        ::std::string::String::from("1")
+    pub fn default_ver() -> String {
+        String::from("1")
     }
 }
-pub type FileName = ::std::string::String;
+pub type FileName = String;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Fixture {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "Fixture::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default = "Fixture::default_multipatch", rename = "@multipatch")]
-    pub multipatch: ::std::string::String,
+    pub multipatch: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(default, rename = "GDTFSpec")]
-    pub gdtf_spec: ::core::option::Option<::std::string::String>,
+    pub gdtf_spec: Option<String>,
     #[serde(default, rename = "GDTFMode")]
-    pub gdtf_mode: ::core::option::Option<::std::string::String>,
+    pub gdtf_mode: Option<String>,
     #[serde(default, rename = "Focus")]
-    pub focus: ::core::option::Option<::std::string::String>,
+    pub focus: Option<String>,
     #[serde(default, rename = "CastShadow")]
-    pub cast_shadow: ::core::option::Option<::core::primitive::bool>,
+    pub cast_shadow: Option<bool>,
     #[serde(default, rename = "DMXInvertPan")]
-    pub dmx_invert_pan: ::core::option::Option<::core::primitive::bool>,
+    pub dmx_invert_pan: Option<bool>,
     #[serde(default, rename = "DMXInvertTilt")]
-    pub dmx_invert_tilt: ::core::option::Option<::core::primitive::bool>,
+    pub dmx_invert_tilt: Option<bool>,
     #[serde(default, rename = "Position")]
-    pub position: ::core::option::Option<::std::string::String>,
+    pub position: Option<String>,
     #[serde(default, rename = "Function")]
-    pub function: ::core::option::Option<::std::string::String>,
+    pub function: Option<String>,
     #[serde(rename = "FixtureID")]
-    pub fixture_id: ::std::string::String,
+    pub fixture_id: String,
     #[serde(default, rename = "FixtureIDNumeric")]
-    pub fixture_id_numeric: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_id_numeric: Option<i32>,
     #[serde(default, rename = "FixtureTypeId")]
-    pub fixture_type_id: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_type_id: Option<i32>,
     #[serde(rename = "UnitNumber")]
-    pub unit_number: ::core::primitive::i32,
+    pub unit_number: i32,
     #[serde(default, rename = "ChildPosition")]
-    pub child_position: ::core::option::Option<::std::string::String>,
+    pub child_position: Option<String>,
     #[serde(default, rename = "Addresses")]
-    pub addresses: ::core::option::Option<Addresses>,
+    pub addresses: Option<Addresses>,
     #[serde(default, rename = "Protocols")]
-    pub protocols: ::core::option::Option<Protocols>,
+    pub protocols: Option<Protocols>,
     #[serde(default, rename = "Alignments")]
-    pub alignments: ::core::option::Option<Alignments>,
+    pub alignments: Option<Alignments>,
     #[serde(default, rename = "CustomCommands")]
-    pub custom_commands: ::core::option::Option<CustomCommands>,
+    pub custom_commands: Option<CustomCommands>,
     #[serde(default, rename = "Overwrites")]
-    pub overwrites: ::core::option::Option<Overwrites>,
+    pub overwrites: Option<Overwrites>,
     #[serde(default, rename = "Connections")]
-    pub connections: ::core::option::Option<Connections>,
+    pub connections: Option<Connections>,
     #[serde(default, rename = "Color")]
-    pub color: ::core::option::Option<::std::string::String>,
+    pub color: Option<String>,
     #[serde(default, rename = "CustomIdType")]
-    pub custom_id_type: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id_type: Option<i32>,
     #[serde(default, rename = "CustomId")]
-    pub custom_id: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id: Option<i32>,
     #[serde(default, rename = "Mappings")]
-    pub mappings: ::core::option::Option<Mappings>,
+    pub mappings: Option<Mappings>,
     #[serde(default, rename = "Gobo")]
-    pub gobo: ::core::option::Option<Gobo>,
+    pub gobo: Option<Gobo>,
     #[serde(default, rename = "ChildList")]
-    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
+    pub child_list: Option<Box<ChildList>>,
 }
 impl Fixture {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_multipatch() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_multipatch() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FocusPoint {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "FocusPoint::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(rename = "Geometries")]
     pub geometries: Geometries,
 }
 impl FocusPoint {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
 }
-pub type GeneralSceneDescription = GeneralSceneDescriptionElementType;
+pub type GeneralSceneDescription = GeneralSceneDescription;
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GeneralSceneDescriptionElementType {
+pub struct GeneralSceneDescription {
     #[serde(rename = "@verMajor")]
-    pub ver_major: ::core::primitive::i32,
+    pub ver_major: i32,
     #[serde(rename = "@verMinor")]
-    pub ver_minor: ::core::primitive::i32,
+    pub ver_minor: i32,
     #[serde(default, rename = "@provider")]
-    pub provider: ::core::option::Option<::std::string::String>,
+    pub provider: Option<String>,
     #[serde(default, rename = "@providerVersion")]
-    pub provider_version: ::core::option::Option<::std::string::String>,
+    pub provider_version: Option<String>,
     #[serde(default, rename = "UserData")]
-    pub user_data: ::core::option::Option<UserData>,
+    pub user_data: Option<UserData>,
     #[serde(rename = "Scene")]
     pub scene: Scene,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Geometries {
     #[serde(default, rename = "Geometry3D")]
-    pub geometry_3d: ::std::vec::Vec<Geometry3D>,
+    pub geometry_3d: Vec<Geometry3D>,
     #[serde(default, rename = "Symbol")]
-    pub symbol: ::std::vec::Vec<Symbol>,
+    pub symbol: Vec<Symbol>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Geometry3D {
     #[serde(rename = "@fileName")]
-    pub file_name: ::std::string::String,
+    pub file_name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Gobo {
     #[serde(default = "Gobo::default_rotation", rename = "@rotation")]
-    pub rotation: ::core::primitive::f32,
+    pub rotation: f32,
 }
 impl Gobo {
     #[must_use]
-    pub fn default_rotation() -> ::core::primitive::f32 {
+    pub fn default_rotation() -> f32 {
         0f32
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GroupObject {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "GroupObject::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(rename = "ChildList")]
-    pub child_list: ::std::boxed::Box<ChildList>,
+    pub child_list: Box<ChildList>,
 }
 impl GroupObject {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
 }
-pub type Ipv4Adress = ::std::string::String;
-pub type Ipv6Adress = ::std::string::String;
+pub type Ipv4Adress = String;
+pub type Ipv6Adress = String;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Layer {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "Layer::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "ChildList")]
-    pub child_list: ::core::option::Option<ChildList>,
+    pub child_list: Option<ChildList>,
 }
 impl Layer {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Layers {
     #[serde(default, rename = "Layer")]
-    pub layer: ::std::vec::Vec<Layer>,
+    pub layer: Vec<Layer>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Mapping {
     #[serde(rename = "@linkedDef")]
-    pub linked_def: ::std::string::String,
+    pub linked_def: String,
     #[serde(default, rename = "ux")]
-    pub ux: ::core::option::Option<::core::primitive::i32>,
+    pub ux: Option<i32>,
     #[serde(default, rename = "uy")]
-    pub uy: ::core::option::Option<::core::primitive::i32>,
+    pub uy: Option<i32>,
     #[serde(default, rename = "ox")]
-    pub ox: ::core::option::Option<::core::primitive::i32>,
+    pub ox: Option<i32>,
     #[serde(default, rename = "oy")]
-    pub oy: ::core::option::Option<::core::primitive::i32>,
+    pub oy: Option<i32>,
     #[serde(default, rename = "rz")]
-    pub rz: ::core::option::Option<::core::primitive::f32>,
+    pub rz: Option<f32>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MappingDefinition {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "MappingDefinition::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(rename = "SizeX")]
-    pub size_x: ::core::primitive::i32,
+    pub size_x: i32,
     #[serde(rename = "SizeY")]
-    pub size_y: ::core::primitive::i32,
+    pub size_y: i32,
     #[serde(rename = "Source")]
     pub source: Source,
     #[serde(default, rename = "ScaleHandeling")]
-    pub scale_handeling: ::core::option::Option<ScaleHandeling>,
+    pub scale_handeling: Option<ScaleHandeling>,
 }
 impl MappingDefinition {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Mappings {
     #[serde(default, rename = "Mapping")]
-    pub mapping: ::std::vec::Vec<Mapping>,
+    pub mapping: Vec<Mapping>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Network {
     #[serde(rename = "@geometry")]
-    pub geometry: ::std::string::String,
+    pub geometry: String,
     #[serde(default, rename = "@ipv4")]
-    pub ipv_4: ::core::option::Option<::std::string::String>,
+    pub ipv_4: Option<String>,
     #[serde(default, rename = "@subnetmask")]
-    pub subnetmask: ::core::option::Option<::std::string::String>,
+    pub subnetmask: Option<String>,
     #[serde(default, rename = "@ipv6")]
-    pub ipv_6: ::core::option::Option<::std::string::String>,
+    pub ipv_6: Option<String>,
     #[serde(default, rename = "@dhcp")]
-    pub dhcp: ::core::option::Option<::std::string::String>,
+    pub dhcp: Option<String>,
     #[serde(default, rename = "@hostname")]
-    pub hostname: ::core::option::Option<::std::string::String>,
+    pub hostname: Option<String>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Overwrite {
     #[serde(rename = "@universal")]
-    pub universal: ::std::string::String,
+    pub universal: String,
     #[serde(default = "Overwrite::default_target", rename = "@target")]
-    pub target: ::std::string::String,
+    pub target: String,
 }
 impl Overwrite {
     #[must_use]
-    pub fn default_target() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_target() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Overwrites {
     #[serde(default, rename = "Overwrite")]
-    pub overwrite: ::std::vec::Vec<Overwrite>,
+    pub overwrite: Vec<Overwrite>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Projection {
     #[serde(default, rename = "Source")]
-    pub source: ::std::vec::Vec<Source>,
+    pub source: Vec<Source>,
     #[serde(default, rename = "ScaleHandeling")]
-    pub scale_handeling: ::std::vec::Vec<ScaleHandeling>,
+    pub scale_handeling: Vec<ScaleHandeling>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Projections {
     #[serde(default, rename = "Projection")]
-    pub projection: ::std::vec::Vec<Projection>,
+    pub projection: Vec<Projection>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Projector {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "Projector::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default = "Projector::default_multipatch", rename = "@multipatch")]
-    pub multipatch: ::std::string::String,
+    pub multipatch: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(rename = "Geometries")]
     pub geometries: Geometries,
     #[serde(rename = "Projections")]
     pub projections: Projections,
     #[serde(default, rename = "GDTFSpec")]
-    pub gdtf_spec: ::core::option::Option<::std::string::String>,
+    pub gdtf_spec: Option<String>,
     #[serde(default, rename = "GDTFMode")]
-    pub gdtf_mode: ::core::option::Option<::std::string::String>,
+    pub gdtf_mode: Option<String>,
     #[serde(default, rename = "CastShadow")]
-    pub cast_shadow: ::core::option::Option<::core::primitive::bool>,
+    pub cast_shadow: Option<bool>,
     #[serde(default, rename = "Addresses")]
-    pub addresses: ::core::option::Option<Addresses>,
+    pub addresses: Option<Addresses>,
     #[serde(default, rename = "Alignments")]
-    pub alignments: ::core::option::Option<Alignments>,
+    pub alignments: Option<Alignments>,
     #[serde(default, rename = "CustomCommands")]
-    pub custom_commands: ::core::option::Option<CustomCommands>,
+    pub custom_commands: Option<CustomCommands>,
     #[serde(default, rename = "Overwrites")]
-    pub overwrites: ::core::option::Option<Overwrites>,
+    pub overwrites: Option<Overwrites>,
     #[serde(default, rename = "Connections")]
-    pub connections: ::core::option::Option<Connections>,
+    pub connections: Option<Connections>,
     #[serde(default, rename = "ChildList")]
-    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
+    pub child_list: Option<Box<ChildList>>,
     #[serde(rename = "FixtureID")]
-    pub fixture_id: ::std::string::String,
+    pub fixture_id: String,
     #[serde(default, rename = "FixtureIDNumeric")]
-    pub fixture_id_numeric: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_id_numeric: Option<i32>,
     #[serde(default, rename = "FixtureTypeId")]
-    pub fixture_type_id: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_type_id: Option<i32>,
     #[serde(default, rename = "UnitNumber")]
-    pub unit_number: ::core::option::Option<::core::primitive::i32>,
+    pub unit_number: Option<i32>,
     #[serde(default, rename = "CustomIdType")]
-    pub custom_id_type: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id_type: Option<i32>,
     #[serde(default, rename = "CustomId")]
-    pub custom_id: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id: Option<i32>,
 }
 impl Projector {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_multipatch() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_multipatch() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Protocol {
     #[serde(default = "Protocol::default_geometry", rename = "@geometry")]
-    pub geometry: ::std::string::String,
+    pub geometry: String,
     #[serde(default = "Protocol::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default = "Protocol::default_type_", rename = "@type")]
-    pub type_: ::std::string::String,
+    pub type_: String,
     #[serde(default = "Protocol::default_version", rename = "@version")]
-    pub version: ::std::string::String,
+    pub version: String,
     #[serde(default, rename = "@transmission")]
-    pub transmission: ::core::option::Option<TransmissionEnum>,
+    pub transmission: Option<TransmissionEnum>,
 }
 impl Protocol {
     #[must_use]
-    pub fn default_geometry() -> ::std::string::String {
-        ::std::string::String::from("NetworkInOut_1")
+    pub fn default_geometry() -> String {
+        String::from("NetworkInOut_1")
     }
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_type_() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_type_() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_version() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_version() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Protocols {
     #[serde(default, rename = "Protocol")]
-    pub protocol: ::std::vec::Vec<Protocol>,
+    pub protocol: Vec<Protocol>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ScaleHandeling {
@@ -493,73 +493,73 @@ impl ScaleHandeling {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Scene {
     #[serde(default, rename = "AUXData")]
-    pub aux_data: ::core::option::Option<AuxData>,
+    pub aux_data: Option<AuxData>,
     #[serde(rename = "Layers")]
     pub layers: Layers,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SceneObject {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "SceneObject::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default = "SceneObject::default_multipatch", rename = "@multipatch")]
-    pub multipatch: ::std::string::String,
+    pub multipatch: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(rename = "Geometries")]
     pub geometries: Geometries,
     #[serde(default, rename = "GDTFSpec")]
-    pub gdtf_spec: ::core::option::Option<::std::string::String>,
+    pub gdtf_spec: Option<String>,
     #[serde(default, rename = "GDTFMode")]
-    pub gdtf_mode: ::core::option::Option<::std::string::String>,
+    pub gdtf_mode: Option<String>,
     #[serde(default, rename = "CastShadow")]
-    pub cast_shadow: ::core::option::Option<::core::primitive::bool>,
+    pub cast_shadow: Option<bool>,
     #[serde(default, rename = "Addresses")]
-    pub addresses: ::core::option::Option<Addresses>,
+    pub addresses: Option<Addresses>,
     #[serde(default, rename = "Alignments")]
-    pub alignments: ::core::option::Option<Alignments>,
+    pub alignments: Option<Alignments>,
     #[serde(default, rename = "CustomCommands")]
-    pub custom_commands: ::core::option::Option<CustomCommands>,
+    pub custom_commands: Option<CustomCommands>,
     #[serde(default, rename = "Overwrites")]
-    pub overwrites: ::core::option::Option<Overwrites>,
+    pub overwrites: Option<Overwrites>,
     #[serde(default, rename = "Connections")]
-    pub connections: ::core::option::Option<Connections>,
+    pub connections: Option<Connections>,
     #[serde(default, rename = "FixtureID")]
-    pub fixture_id: ::core::option::Option<::std::string::String>,
+    pub fixture_id: Option<String>,
     #[serde(default, rename = "FixtureIDNumeric")]
-    pub fixture_id_numeric: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_id_numeric: Option<i32>,
     #[serde(default, rename = "FixtureTypeId")]
-    pub fixture_type_id: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_type_id: Option<i32>,
     #[serde(default, rename = "UnitNumber")]
-    pub unit_number: ::core::option::Option<::core::primitive::i32>,
+    pub unit_number: Option<i32>,
     #[serde(default, rename = "CustomId")]
-    pub custom_id: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id: Option<i32>,
     #[serde(default, rename = "CustomIdType")]
-    pub custom_id_type: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id_type: Option<i32>,
     #[serde(default, rename = "ChildList")]
-    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
+    pub child_list: Option<Box<ChildList>>,
 }
 impl SceneObject {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_multipatch() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_multipatch() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Source {
     #[serde(rename = "@linkedGeometry")]
-    pub linked_geometry: ::std::string::String,
+    pub linked_geometry: String,
     #[serde(rename = "@type")]
     pub type_: SourceEnum,
     #[serde(default, rename = "$text")]
-    pub content: ::std::string::String,
+    pub content: String,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub enum SourceEnum {
@@ -575,100 +575,94 @@ pub enum SourceEnum {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Sources {
     #[serde(default, rename = "Source")]
-    pub source: ::std::vec::Vec<Source>,
+    pub source: Vec<Source>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Support {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "Support::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default = "Support::default_multipatch", rename = "@multipatch")]
-    pub multipatch: ::std::string::String,
+    pub multipatch: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(default, rename = "Position")]
-    pub position: ::core::option::Option<::std::string::String>,
+    pub position: Option<String>,
     #[serde(rename = "Geometries")]
     pub geometries: Geometries,
     #[serde(default, rename = "Function")]
-    pub function: ::core::option::Option<::std::string::String>,
+    pub function: Option<String>,
     #[serde(rename = "ChainLength")]
-    pub chain_length: ::core::primitive::f32,
+    pub chain_length: f32,
     #[serde(default, rename = "GDTFSpec")]
-    pub gdtf_spec: ::core::option::Option<::std::string::String>,
+    pub gdtf_spec: Option<String>,
     #[serde(default, rename = "GDTFMode")]
-    pub gdtf_mode: ::core::option::Option<::std::string::String>,
+    pub gdtf_mode: Option<String>,
     #[serde(default, rename = "CastShadow")]
-    pub cast_shadow: ::core::option::Option<::core::primitive::bool>,
+    pub cast_shadow: Option<bool>,
     #[serde(default, rename = "Addresses")]
-    pub addresses: ::core::option::Option<Addresses>,
+    pub addresses: Option<Addresses>,
     #[serde(default, rename = "Alignments")]
-    pub alignments: ::core::option::Option<Alignments>,
+    pub alignments: Option<Alignments>,
     #[serde(default, rename = "CustomCommands")]
-    pub custom_commands: ::core::option::Option<CustomCommands>,
+    pub custom_commands: Option<CustomCommands>,
     #[serde(default, rename = "Overwrites")]
-    pub overwrites: ::core::option::Option<Overwrites>,
+    pub overwrites: Option<Overwrites>,
     #[serde(default, rename = "Connections")]
-    pub connections: ::core::option::Option<Connections>,
+    pub connections: Option<Connections>,
     #[serde(rename = "FixtureID")]
-    pub fixture_id: ::std::string::String,
+    pub fixture_id: String,
     #[serde(default, rename = "FixtureIDNumeric")]
-    pub fixture_id_numeric: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_id_numeric: Option<i32>,
     #[serde(default, rename = "FixtureTypeId")]
-    pub fixture_type_id: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_type_id: Option<i32>,
     #[serde(default, rename = "UnitNumber")]
-    pub unit_number: ::core::option::Option<::core::primitive::i32>,
+    pub unit_number: Option<i32>,
     #[serde(default, rename = "CustomIdType")]
-    pub custom_id_type: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id_type: Option<i32>,
     #[serde(default, rename = "CustomId")]
-    pub custom_id: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id: Option<i32>,
     #[serde(default, rename = "ChildList")]
-    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
+    pub child_list: Option<Box<ChildList>>,
 }
 impl Support {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_multipatch() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_multipatch() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Symbol {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(rename = "@symdef")]
-    pub symdef: ::std::string::String,
+    pub symdef: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Symdef {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "Symdef::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(rename = "ChildList")]
-    pub child_list: SymdefChildList,
+    pub child_list: Geometries,
 }
 impl Symdef {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
 }
-#[derive(Debug, Deserialize, Serialize)]
-pub struct SymdefChildList {
-    #[serde(default, rename = "Geometry3D")]
-    pub geometry_3d: ::std::vec::Vec<Geometry3D>,
-    #[serde(default, rename = "Symbol")]
-    pub symbol: ::std::vec::Vec<Symbol>,
-}
+pub type SymdefChildList = Geometries;
 #[derive(Debug, Deserialize, Serialize)]
 pub enum TransmissionEnum {
     #[serde(rename = "Unicast")]
@@ -683,132 +677,132 @@ pub enum TransmissionEnum {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Truss {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "Truss::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default = "Truss::default_multipatch", rename = "@multipatch")]
-    pub multipatch: ::std::string::String,
+    pub multipatch: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(default, rename = "Position")]
-    pub position: ::core::option::Option<::std::string::String>,
+    pub position: Option<String>,
     #[serde(rename = "Geometries")]
     pub geometries: Geometries,
     #[serde(default, rename = "Function")]
-    pub function: ::core::option::Option<::std::string::String>,
+    pub function: Option<String>,
     #[serde(default, rename = "GDTFSpec")]
-    pub gdtf_spec: ::core::option::Option<::std::string::String>,
+    pub gdtf_spec: Option<String>,
     #[serde(default, rename = "GDTFMode")]
-    pub gdtf_mode: ::core::option::Option<::std::string::String>,
+    pub gdtf_mode: Option<String>,
     #[serde(default, rename = "CastShadow")]
-    pub cast_shadow: ::core::option::Option<::core::primitive::bool>,
+    pub cast_shadow: Option<bool>,
     #[serde(default, rename = "Addresses")]
-    pub addresses: ::core::option::Option<Addresses>,
+    pub addresses: Option<Addresses>,
     #[serde(default, rename = "Alignments")]
-    pub alignments: ::core::option::Option<Alignments>,
+    pub alignments: Option<Alignments>,
     #[serde(default, rename = "CustomCommands")]
-    pub custom_commands: ::core::option::Option<CustomCommands>,
+    pub custom_commands: Option<CustomCommands>,
     #[serde(default, rename = "Overwrites")]
-    pub overwrites: ::core::option::Option<Overwrites>,
+    pub overwrites: Option<Overwrites>,
     #[serde(default, rename = "Connections")]
-    pub connections: ::core::option::Option<Connections>,
+    pub connections: Option<Connections>,
     #[serde(default, rename = "ChildPosition")]
-    pub child_position: ::core::option::Option<::std::string::String>,
+    pub child_position: Option<String>,
     #[serde(default, rename = "ChildList")]
-    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
+    pub child_list: Option<Box<ChildList>>,
     #[serde(rename = "FixtureID")]
-    pub fixture_id: ::std::string::String,
+    pub fixture_id: String,
     #[serde(default, rename = "FixtureIDNumeric")]
-    pub fixture_id_numeric: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_id_numeric: Option<i32>,
     #[serde(default, rename = "FixtureTypeId")]
-    pub fixture_type_id: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_type_id: Option<i32>,
     #[serde(default, rename = "UnitNumber")]
-    pub unit_number: ::core::option::Option<::core::primitive::i32>,
+    pub unit_number: Option<i32>,
     #[serde(default, rename = "CustomIdType")]
-    pub custom_id_type: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id_type: Option<i32>,
     #[serde(default, rename = "CustomId")]
-    pub custom_id: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id: Option<i32>,
 }
 impl Truss {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_multipatch() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_multipatch() -> String {
+        String::from("")
     }
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct UserData {
     #[serde(default, rename = "Data")]
-    pub data: ::std::vec::Vec<Data>,
+    pub data: Vec<Data>,
 }
 #[derive(Debug, Deserialize, Serialize)]
 pub struct VideoScreen {
     #[serde(rename = "@uuid")]
-    pub uuid: ::std::string::String,
+    pub uuid: String,
     #[serde(default = "VideoScreen::default_name", rename = "@name")]
-    pub name: ::std::string::String,
+    pub name: String,
     #[serde(default = "VideoScreen::default_multipatch", rename = "@multipatch")]
-    pub multipatch: ::std::string::String,
+    pub multipatch: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: ::core::option::Option<::std::string::String>,
+    pub matrix: Option<String>,
     #[serde(default, rename = "Classing")]
-    pub classing: ::core::option::Option<::std::string::String>,
+    pub classing: Option<String>,
     #[serde(rename = "Geometries")]
     pub geometries: Geometries,
     #[serde(default, rename = "Sources")]
-    pub sources: ::core::option::Option<Sources>,
+    pub sources: Option<Sources>,
     #[serde(default, rename = "Function")]
-    pub function: ::core::option::Option<::std::string::String>,
+    pub function: Option<String>,
     #[serde(default, rename = "GDTFSpec")]
-    pub gdtf_spec: ::core::option::Option<::std::string::String>,
+    pub gdtf_spec: Option<String>,
     #[serde(default, rename = "GDTFMode")]
-    pub gdtf_mode: ::core::option::Option<::std::string::String>,
+    pub gdtf_mode: Option<String>,
     #[serde(default, rename = "CastShadow")]
-    pub cast_shadow: ::core::option::Option<::core::primitive::bool>,
+    pub cast_shadow: Option<bool>,
     #[serde(default, rename = "Addresses")]
-    pub addresses: ::core::option::Option<Addresses>,
+    pub addresses: Option<Addresses>,
     #[serde(default, rename = "Alignments")]
-    pub alignments: ::core::option::Option<Alignments>,
+    pub alignments: Option<Alignments>,
     #[serde(default, rename = "CustomCommands")]
-    pub custom_commands: ::core::option::Option<CustomCommands>,
+    pub custom_commands: Option<CustomCommands>,
     #[serde(default, rename = "Overwrites")]
-    pub overwrites: ::core::option::Option<Overwrites>,
+    pub overwrites: Option<Overwrites>,
     #[serde(default, rename = "Connections")]
-    pub connections: ::core::option::Option<Connections>,
+    pub connections: Option<Connections>,
     #[serde(default, rename = "ChildList")]
-    pub child_list: ::core::option::Option<::std::boxed::Box<ChildList>>,
+    pub child_list: Option<Box<ChildList>>,
     #[serde(rename = "FixtureID")]
-    pub fixture_id: ::std::string::String,
+    pub fixture_id: String,
     #[serde(default, rename = "FixtureIDNumeric")]
-    pub fixture_id_numeric: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_id_numeric: Option<i32>,
     #[serde(default, rename = "FixtureTypeId")]
-    pub fixture_type_id: ::core::option::Option<::core::primitive::i32>,
+    pub fixture_type_id: Option<i32>,
     #[serde(default, rename = "UnitNumber")]
-    pub unit_number: ::core::option::Option<::core::primitive::i32>,
+    pub unit_number: Option<i32>,
     #[serde(default, rename = "CustomIdType")]
-    pub custom_id_type: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id_type: Option<i32>,
     #[serde(default, rename = "CustomId")]
-    pub custom_id: ::core::option::Option<::core::primitive::i32>,
+    pub custom_id: Option<i32>,
 }
 impl VideoScreen {
     #[must_use]
-    pub fn default_name() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_name() -> String {
+        String::from("")
     }
     #[must_use]
-    pub fn default_multipatch() -> ::std::string::String {
-        ::std::string::String::from("")
+    pub fn default_multipatch() -> String {
+        String::from("")
     }
 }
-pub type Ciecolortype = ::std::string::String;
-pub type Guidtype = ::std::string::String;
-pub type Matrixtype = ::std::string::String;
-pub type Positiveinteger = ::core::primitive::i32;
+pub type Ciecolortype = String;
+pub type Guidtype = String;
+pub type Matrixtype = String;
+pub type Positiveinteger = i32;
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Scaleenum {
     #[serde(rename = "ScaleKeepRatio")]
@@ -817,56 +811,4 @@ pub enum Scaleenum {
     ScaleIgnoreRatio,
     #[serde(rename = "KeepSizeCenter")]
     KeepSizeCenter,
-}
-pub mod xs {
-    use serde::{Deserialize, Serialize};
-    #[derive(Debug, Default, Deserialize, Serialize)]
-    pub struct Entities(pub ::std::vec::Vec<::std::string::String>);
-    #[derive(Debug, Default, Deserialize, Serialize)]
-    pub struct Entity(pub ::std::vec::Vec<::std::string::String>);
-    pub type Id = ::std::string::String;
-    pub type Idref = ::std::string::String;
-    #[derive(Debug, Default, Deserialize, Serialize)]
-    pub struct Idrefs(pub ::std::vec::Vec<::std::string::String>);
-    pub type NcName = ::std::string::String;
-    pub type Nmtoken = ::std::string::String;
-    #[derive(Debug, Default, Deserialize, Serialize)]
-    pub struct Nmtokens(pub ::std::vec::Vec<::std::string::String>);
-    pub type Notation = ::std::string::String;
-    pub type Name = ::std::string::String;
-    pub type QName = ::std::string::String;
-    pub type AnySimpleType = ::std::string::String;
-    pub type AnyUri = ::std::string::String;
-    pub type Base64Binary = ::std::string::String;
-    pub type Boolean = ::core::primitive::bool;
-    pub type Byte = ::core::primitive::i8;
-    pub type Date = ::std::string::String;
-    pub type DateTime = ::std::string::String;
-    pub type Decimal = ::core::primitive::f64;
-    pub type Double = ::core::primitive::f64;
-    pub type Duration = ::std::string::String;
-    pub type Float = ::core::primitive::f32;
-    pub type GDay = ::std::string::String;
-    pub type GMonth = ::std::string::String;
-    pub type GMonthDay = ::std::string::String;
-    pub type GYear = ::std::string::String;
-    pub type GYearMonth = ::std::string::String;
-    pub type HexBinary = ::std::string::String;
-    pub type Int = ::core::primitive::i32;
-    pub type Integer = ::core::primitive::i32;
-    pub type Language = ::std::string::String;
-    pub type Long = ::core::primitive::i64;
-    pub type NegativeInteger = ::core::primitive::isize;
-    pub type NonNegativeInteger = ::core::primitive::usize;
-    pub type NonPositiveInteger = ::core::primitive::isize;
-    pub type NormalizedString = ::std::string::String;
-    pub type PositiveInteger = ::core::primitive::usize;
-    pub type Short = ::core::primitive::i16;
-    pub type String = ::std::string::String;
-    pub type Time = ::std::string::String;
-    pub type Token = ::std::string::String;
-    pub type UnsignedByte = ::core::primitive::u8;
-    pub type UnsignedInt = ::core::primitive::u32;
-    pub type UnsignedLong = ::core::primitive::u64;
-    pub type UnsignedShort = ::core::primitive::u16;
 }

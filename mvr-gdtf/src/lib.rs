@@ -4,6 +4,7 @@ use zip::ZipArchive;
 
 use crate::mvr::GeneralSceneDescription;
 
+pub mod gdtf;
 pub mod mvr;
 
 mod error;
