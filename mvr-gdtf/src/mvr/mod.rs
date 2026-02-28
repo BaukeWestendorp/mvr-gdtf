@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 mod values;
 
-use values::*;
+pub use values::*;
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
