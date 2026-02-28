@@ -11,5 +11,5 @@ fn main() {
 
     let mvr_file = MvrFile::load_from_file(file_path).unwrap();
 
-    dbg!(&mvr_file.general_scene_description());
+    println!("{:#?}", mvr_file.general_scene_description());
 }
