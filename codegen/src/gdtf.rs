@@ -23,7 +23,7 @@ pub fn generate_gdtf_schema() -> anyhow::Result<()> {
 
     let mut code = module.to_token_stream().to_string();
     code = rustfmt_pretty_print(code)?;
-    std::fs::write("mvr-gdtf/src/gdtf/schema.rs", code)?;
+    std::fs::write("codegen/schema/gdtf.rs", code)?;
 
     Ok(())
 }
