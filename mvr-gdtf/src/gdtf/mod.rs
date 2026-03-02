@@ -1,5 +1,4 @@
 mod desc;
-mod values;
 
 use std::{fs::File, io::Read as _, path::Path};
 
@@ -8,7 +7,6 @@ use zip::ZipArchive;
 use crate::{Resource, load_zip};
 
 pub use desc::*;
-pub use values::*;
 
 pub struct GdtfFile {
     description: GdtfDescription,

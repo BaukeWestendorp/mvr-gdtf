@@ -1,10 +1,8 @@
 mod gsd;
-mod values;
 
 use std::{fs::File, io::Read as _, path::Path};
 
 pub use gsd::*;
-pub use values::*;
 use zip::ZipArchive;
 
 use crate::{Resource, gdtf::GdtfFile, load_zip};

@@ -41,4 +41,32 @@ pub enum Error {
     MatrixFormatError(String),
     #[error("Matrix parse value error: {0}")]
     MatrixParseValueError(String),
+
+    #[error("DMX break value cannot be zero.")]
+    DmxBreakZero,
+    #[error("DMX break parse error: {0}")]
+    DmxBreakParseError(String),
+    #[error("Invalid DMX break format: {0}")]
+    InvalidDmxBreakFormat(String),
+    #[error("Invalid DMX address: {0}")]
+    InvalidDmxAddress(String),
+    #[error("Invalid physical value: {0}")]
+    InvalidPhysicalValue(f32),
+
+    #[error("Invalid GDTF Name: {0}")]
+    InvalidName(String),
+    #[error("Invalid GDTF Node reference: {0}")]
+    InvalidNode(String),
+    #[error("Invalid GDTF FeatureType (expected Group.Feature): {0}")]
+    InvalidFeatureType(String),
+    #[error("Invalid GDTF DataVersion (expected major.minor): {0}")]
+    InvalidDataVersion(String),
+    #[error("Invalid GDTF Vector3 (expected x,y,z): {0}")]
+    InvalidVector3(String),
+    #[error("Invalid GDTF TwoArray (expected x,y): {0}")]
+    InvalidTwoArray(String),
+    #[error("Invalid GDTF Offset (expected None or n[,n]*): {0}")]
+    InvalidOffset(String),
+    #[error("Invalid GDTF DMX value (expected None or Uint/n or Uint/ns): {0}")]
+    InvalidDmxValue(String),
 }

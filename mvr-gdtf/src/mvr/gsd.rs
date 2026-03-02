@@ -3,7 +3,7 @@ use std::ops::{self, Deref, DerefMut};
 
 use uuid::Uuid;
 
-use crate::mvr::{CieColor, FileName, Matrix};
+use crate::{CieColor, FileName, Matrix4x3};
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -38,16 +38,10 @@ pub struct AuxData {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Address {
-    #[serde(default = "Address::default_break", rename = "@break")]
+    #[serde(default, rename = "@break")]
     pub break_: u32,
     #[serde(rename = "$text")]
     pub absolute: u32,
-}
-
-impl Address {
-    pub fn default_break() -> u32 {
-        0
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -145,14 +139,8 @@ impl From<Alignments> for Vec<Alignment> {
 pub struct BasicChildListAttribute {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "BasicChildListAttribute::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-}
-
-impl BasicChildListAttribute {
-    pub fn default_name() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -386,12 +374,12 @@ impl Data {
 pub struct Fixture {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "Fixture::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-    #[serde(default = "Fixture::default_multipatch", rename = "@multipatch")]
+    #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(default, rename = "GDTFSpec")]
@@ -446,35 +434,19 @@ pub struct Fixture {
     pub child_list: Box<ChildList>,
 }
 
-impl Fixture {
-    pub fn default_name() -> String {
-        String::from("")
-    }
-
-    pub fn default_multipatch() -> Option<Uuid> {
-        None
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct FocusPoint {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "FocusPoint::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
     pub geometries: Geometries,
-}
-
-impl FocusPoint {
-    pub fn default_name() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -492,20 +464,14 @@ pub struct Geometry3D {
     #[serde(rename = "@fileName")]
     pub file_name: FileName,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Gobo {
-    #[serde(default = "Gobo::default_rotation", rename = "@rotation")]
+    #[serde(default, rename = "@rotation")]
     pub rotation: f32,
-}
-
-impl Gobo {
-    pub fn default_rotation() -> f32 {
-        0f32
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -513,20 +479,14 @@ impl Gobo {
 pub struct GroupObject {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "GroupObject::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "ChildList")]
     pub child_list: Box<ChildList>,
-}
-
-impl GroupObject {
-    pub fn default_name() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -534,18 +494,12 @@ impl GroupObject {
 pub struct Layer {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "Layer::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "ChildList")]
     pub child_list: ChildList,
-}
-
-impl Layer {
-    pub fn default_name() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -630,7 +584,7 @@ pub struct Mapping {
 pub struct MappingDefinition {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "MappingDefinition::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(rename = "SizeX")]
     pub size_x: i32,
@@ -640,12 +594,6 @@ pub struct MappingDefinition {
     pub source: Source,
     #[serde(default, rename = "ScaleHandeling")]
     pub scale_handeling: Option<ScaleHandling>,
-}
-
-impl MappingDefinition {
-    pub fn default_name() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -677,14 +625,8 @@ pub struct Network {
 pub struct Overwrite {
     #[serde(rename = "@universal")]
     pub universal: String,
-    #[serde(default = "Overwrite::default_target", rename = "@target")]
+    #[serde(default, rename = "@target")]
     pub target: String,
-}
-
-impl Overwrite {
-    pub fn default_target() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -715,12 +657,12 @@ pub struct Projections {
 pub struct Projector {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "Projector::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-    #[serde(default = "Projector::default_multipatch", rename = "@multipatch")]
+    #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
@@ -759,26 +701,16 @@ pub struct Projector {
     pub custom_id: Option<i32>,
 }
 
-impl Projector {
-    pub fn default_name() -> String {
-        String::from("")
-    }
-
-    pub fn default_multipatch() -> Option<Uuid> {
-        None
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Protocol {
     #[serde(default = "Protocol::default_geometry", rename = "@geometry")]
     pub geometry: String,
-    #[serde(default = "Protocol::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-    #[serde(default = "Protocol::default_type", rename = "@type")]
+    #[serde(default, rename = "@type")]
     pub type_: String,
-    #[serde(default = "Protocol::default_version", rename = "@version")]
+    #[serde(default, rename = "@version")]
     pub version: String,
     #[serde(default, rename = "@transmission")]
     pub transmission: Option<TransmissionType>,
@@ -787,18 +719,6 @@ pub struct Protocol {
 impl Protocol {
     pub fn default_geometry() -> String {
         String::from("NetworkInOut_1")
-    }
-
-    pub fn default_name() -> String {
-        String::from("")
-    }
-
-    pub fn default_type() -> String {
-        String::from("")
-    }
-
-    pub fn default_version() -> String {
-        String::from("")
     }
 }
 
@@ -842,12 +762,12 @@ impl ops::DerefMut for ScaleHandling {
 pub struct SceneObject {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "SceneObject::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-    #[serde(default = "SceneObject::default_multipatch", rename = "@multipatch")]
+    #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
@@ -882,16 +802,6 @@ pub struct SceneObject {
     pub custom_id_type: Option<i32>,
     #[serde(default, rename = "ChildList")]
     pub child_list: Box<ChildList>,
-}
-
-impl SceneObject {
-    pub fn default_name() -> String {
-        String::from("")
-    }
-
-    pub fn default_multipatch() -> Option<Uuid> {
-        None
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -930,12 +840,12 @@ pub struct Sources {
 pub struct Support {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "Support::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-    #[serde(default = "Support::default_multipatch", rename = "@multipatch")]
+    #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(default, rename = "Position")]
@@ -978,16 +888,6 @@ pub struct Support {
     pub child_list: Box<ChildList>,
 }
 
-impl Support {
-    pub fn default_name() -> String {
-        String::from("")
-    }
-
-    pub fn default_multipatch() -> Option<Uuid> {
-        None
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Symbol {
@@ -996,7 +896,7 @@ pub struct Symbol {
     #[serde(rename = "@symdef")]
     pub symdef: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1004,16 +904,10 @@ pub struct Symbol {
 pub struct Symdef {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "Symdef::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(rename = "ChildList")]
     pub child_list: Geometries,
-}
-
-impl Symdef {
-    pub fn default_name() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1034,12 +928,12 @@ pub enum TransmissionType {
 pub struct Truss {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "Truss::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-    #[serde(default = "Truss::default_multipatch", rename = "@multipatch")]
+    #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(default, rename = "Position")]
@@ -1082,16 +976,6 @@ pub struct Truss {
     pub custom_id: Option<i32>,
 }
 
-impl Truss {
-    pub fn default_name() -> String {
-        String::from("")
-    }
-
-    pub fn default_multipatch() -> Option<Uuid> {
-        None
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct UserData {
@@ -1104,12 +988,12 @@ pub struct UserData {
 pub struct VideoScreen {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
-    #[serde(default = "VideoScreen::default_name", rename = "@name")]
+    #[serde(default, rename = "@name")]
     pub name: String,
-    #[serde(default = "VideoScreen::default_multipatch", rename = "@multipatch")]
+    #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix>,
+    pub matrix: Option<Matrix4x3>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
@@ -1148,16 +1032,6 @@ pub struct VideoScreen {
     pub custom_id_type: Option<i32>,
     #[serde(default, rename = "CustomId")]
     pub custom_id: Option<i32>,
-}
-
-impl VideoScreen {
-    pub fn default_name() -> String {
-        String::from("")
-    }
-
-    pub fn default_multipatch() -> Option<Uuid> {
-        None
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
