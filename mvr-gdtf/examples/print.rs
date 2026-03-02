@@ -1,4 +1,4 @@
-use mvr_gdtf::MvrFile;
+use mvr_gdtf::gdtf::GdtfFile;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -9,7 +9,7 @@ fn main() {
         std::process::exit(1);
     };
 
-    let mvr_file = MvrFile::load_from_file(file_path).unwrap();
+    let mvr_file = GdtfFile::load_from_file(file_path).unwrap();
 
     println!("{:#?}", mvr_file.general_scene_description());
 }

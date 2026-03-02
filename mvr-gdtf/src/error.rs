@@ -17,9 +17,13 @@ pub enum Error {
 
     #[error("There was a problem parsing the general scene description XML: {source}")]
     ParseGeneralSceneDescription { source: quick_xml::DeError },
-
     #[error("The archive is missing a General Scene Description XML file: {source}")]
     MissingGeneralSceneDescriptionXml { source: zip::result::ZipError },
+
+    #[error("The archive is missing a Description XML file: {source}")]
+    MissingDescriptionXml { source: zip::result::ZipError },
+    #[error("There was a problem parsing the description XML: {source}")]
+    ParseDescription { source: quick_xml::DeError },
 
     #[error("CIE color parse X error: {0}")]
     CieColorParseXError(String),
