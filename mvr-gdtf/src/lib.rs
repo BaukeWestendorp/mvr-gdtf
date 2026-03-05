@@ -35,7 +35,7 @@ where
     let s: Option<String> = Option::deserialize(deserializer)?;
     match s {
         None => Ok(None),
-        Some(ref s) if s == "None" => Ok(None),
+        Some(s) if s == "None" => Ok(None),
         Some(s) => T::from_str(&s)
             .map(Some)
             .map_err(|e| serde::de::Error::custom(format!("Failed to parse: {}", e))),

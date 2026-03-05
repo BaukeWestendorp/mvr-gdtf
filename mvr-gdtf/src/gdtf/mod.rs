@@ -23,7 +23,7 @@ impl GdtfFile {
         Ok(Self { description, resources: Vec::new() })
     }
 
-    pub fn general_scene_description(&self) -> &GdtfDescription {
+    pub fn description(&self) -> &GdtfDescription {
         &self.description
     }
 

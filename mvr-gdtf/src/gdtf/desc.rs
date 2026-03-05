@@ -1,16 +1,15 @@
-use std::{fmt, str};
+use std::{
+    collections::HashSet,
+    fmt,
+    str::{self, FromStr as _},
+};
 
 use uuid::Uuid;
 
-use crate::DmxOffset;
-use crate::DmxValue;
-use crate::FeatureId;
-use crate::Name;
-use crate::Node;
-use crate::Vector3;
-use crate::deserialize_option_from_string_none;
-use crate::serialize_option_as_string_none;
-use crate::{DmxAddress, DmxBreak, Matrix4x3, PhysicalValue};
+use crate::{
+    CieColor, DmxAddress, DmxBreak, DmxOffset, DmxValue, FeatureType, Matrix4x4, Name, Node,
+    PhysicalValue, Vector3, deserialize_option_from_string_none, serialize_option_as_string_none,
+};
 
 /// A data version string formatted as `major.minor` where each is a u8.
 ///
@@ -83,27 +82,27 @@ pub struct AdditionalColorSpaces {
 pub struct AnimationSystem {
     #[serde(
         rename = "@P1",
-        deserialize_with = "deserialize_f32_tuple",
-        serialize_with = "serialize_f32_tuple"
+        deserialize_with = "deserialize_two_array",
+        serialize_with = "serialize_two_array"
     )]
     pub p1: (f32, f32),
     #[serde(
         rename = "@P2",
-        deserialize_with = "deserialize_f32_tuple",
-        serialize_with = "serialize_f32_tuple"
+        deserialize_with = "deserialize_two_array",
+        serialize_with = "serialize_two_array"
     )]
     pub p2: (f32, f32),
     #[serde(
         rename = "@P3",
-        deserialize_with = "deserialize_f32_tuple",
-        serialize_with = "serialize_f32_tuple"
+        deserialize_with = "deserialize_two_array",
+        serialize_with = "serialize_two_array"
     )]
     pub p3: (f32, f32),
     #[serde(rename = "@Radius")]
     pub radius: f32,
 }
 
-fn deserialize_f32_tuple<'de, D>(deserializer: D) -> Result<(f32, f32), D::Error>
+fn deserialize_two_array<'de, D>(deserializer: D) -> Result<(f32, f32), D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -123,18 +122,17 @@ where
     Ok((first, second))
 }
 
-fn serialize_f32_tuple<S>(tuple: &(f32, f32), serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_two_array<S>(tuple: &(f32, f32), serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     serializer.serialize_str(&format!("{},{}", tuple.0, tuple.1))
 }
-
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ArtNet {
     #[serde(default, rename = "Map")]
-    pub map: Option<Map>,
+    pub maps: Vec<Map>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -145,19 +143,14 @@ pub struct Attribute {
     #[serde(rename = "@Pretty")]
     pub pretty: String,
     #[serde(default, rename = "@ActivationGroup")]
-    pub activation_group: Option<Name>,
+    pub activation_group: Option<String>,
     #[serde(rename = "@Feature")]
-    pub feature: FeatureId,
+    pub feature: FeatureType,
     #[serde(default, rename = "@MainAttribute")]
     pub main_attribute: Option<Name>,
     #[serde(default, rename = "@PhysicalUnit")]
     pub physical_unit: PhysicalUnitType,
-    #[serde(
-        default,
-        rename = "@Color",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    #[serde(default, rename = "@Color")]
     pub color: Option<Vector3>,
     #[serde(default, rename = "SubPhysicalUnit")]
     pub sub_physical_unit: Vec<SubPhysicalUnit>,
@@ -178,66 +171,45 @@ pub struct AttributeDefinitions {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Attributes {
     #[serde(default, rename = "Attribute")]
-    pub attribute: Vec<Attribute>,
+    pub attributes: Vec<Attribute>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct BasicGeometryAttributes {
+pub struct Geometry {
     #[serde(rename = "@Name")]
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct BasicGeometryType {
-    #[serde(rename = "@Name")]
-    pub name: Name,
-    #[serde(default, rename = "@Model")]
-    pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(default, rename = "$value")]
-    pub content: Vec<BasicGeometryTypeContent>,
+    pub children: Vec<AnyGeometry>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum BasicGeometryTypeContent {
+pub enum AnyGeometry {
     #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
+    Geometry(Geometry),
     #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
+    Axis(Geometry),
     #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
+    FilterBeam(Geometry),
     #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
+    FilterColor(Geometry),
     #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
+    FilterGobo(Geometry),
     #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
+    FilterShaper(Geometry),
     #[serde(rename = "Beam")]
     Beam(Beam),
     #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
+    MediaServerLayer(Geometry),
     #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
+    MediaServerCamera(Geometry),
     #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
+    MediaServerMaster(Geometry),
     #[serde(rename = "Display")]
     Display(Display),
     #[serde(rename = "Laser")]
@@ -253,10 +225,8 @@ pub enum BasicGeometryTypeContent {
     #[serde(rename = "Support")]
     Support(Support),
     #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
+    Magnet(Geometry),
 }
-
-impl BasicGeometryType {}
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -265,15 +235,10 @@ pub struct Beam {
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(default, rename = "@LampType")]
-    pub lamp_type: Option<LampTypeEnum>,
+    pub lamp_type: Option<LampType>,
     #[serde(default, rename = "@PowerConsumption")]
     pub power_consumption: Option<f32>,
     #[serde(default, rename = "@LuminousFlux")]
@@ -291,61 +256,18 @@ pub struct Beam {
     #[serde(default, rename = "@BeamRadius")]
     pub beam_radius: Option<f32>,
     #[serde(default, rename = "@BeamType")]
-    pub beam_type: Option<BeamTypeEnum>,
+    pub beam_type: Option<BeamType>,
     #[serde(default, rename = "@ColorRenderingIndex")]
     pub color_rendering_index: Option<u8>,
     #[serde(default, rename = "@EmitterSpectrum")]
     pub emitter_spectrum: Option<Node>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<BeamContent>,
+    pub children: Vec<AnyGeometry>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum BeamContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-}
-
-impl Beam {}
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum BeamTypeEnum {
+pub enum BeamType {
     #[serde(rename = "Wash")]
     Wash,
     #[serde(rename = "Spot")]
@@ -361,16 +283,12 @@ pub enum BeamTypeEnum {
     #[serde(rename = "Glow")]
     Glow,
 }
+
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Break {
-    #[serde(
-        default,
-        rename = "@DMXOffset",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub dmx_offset: Option<DmxAddress>,
+    #[serde(default, rename = "@DMXOffset")]
+    pub dmx_offset: DmxAddress,
     #[serde(default = "Break::default_dmx_break", rename = "@DMXBreak")]
     pub dmx_break: u8,
 }
@@ -381,7 +299,7 @@ impl Break {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Ces {
     #[default]
@@ -587,7 +505,10 @@ pub enum Ces {
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct SAcn;
+pub struct SAcn {
+    #[serde(default, rename = "Map")]
+    pub maps: Vec<Map>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -601,7 +522,7 @@ pub struct OpenSoundControl;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Citp;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Cri {
     #[serde(default, rename = "@CES")]
@@ -616,12 +537,12 @@ pub struct CriGroup {
     #[serde(default, rename = "@ColorTemperature")]
     pub color_temperature: Option<f32>,
     #[serde(rename = "CRI")]
-    pub cris: Vec<Cri>,
+    pub cris: HashSet<Cri>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct CrIs {
+pub struct Cris {
     #[serde(default, rename = "CRIGroup")]
     pub cri_groups: Vec<CriGroup>,
 }
@@ -633,14 +554,11 @@ pub struct ChannelFunction {
     pub name: Option<Name>,
     #[serde(default = "ChannelFunction::default_attribute", rename = "@Attribute")]
     pub attribute: Name,
-    #[serde(
-        default = "ChannelFunction::default_original_attribute",
-        rename = "@OriginalAttribute"
-    )]
+    #[serde(default, rename = "@OriginalAttribute")]
     pub original_attribute: String,
     #[serde(default, rename = "@DMXFrom")]
     pub dmx_from: DmxValue,
-    #[serde(rename = "@Default")]
+    #[serde(default, rename = "@Default")]
     pub default: DmxValue,
     #[serde(default, rename = "@PhysicalFrom")]
     pub physical_from: Option<f32>,
@@ -684,9 +602,6 @@ impl ChannelFunction {
     pub fn default_attribute() -> Name {
         Name::from_str("NoFeature").expect("NoFeature must be a valid Name")
     }
-    pub fn default_original_attribute() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -694,7 +609,7 @@ impl ChannelFunction {
 pub struct ChannelSet {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
-    #[serde(rename = "@DMXFrom")]
+    #[serde(default, rename = "@DMXFrom")]
     pub dmx_from: DmxValue,
     #[serde(default, rename = "@PhysicalFrom")]
     pub physical_from: Option<f32>,
@@ -710,40 +625,20 @@ pub struct ColorSpace {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
     #[serde(default, rename = "@Mode")]
-    pub mode: ColorSpaceEnum,
-    #[serde(
-        default,
-        rename = "@Red",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    pub mode: ColorSpaceMode,
+    #[serde(default, rename = "@Red")]
     pub red: Option<Vector3>,
-    #[serde(
-        default,
-        rename = "@Green",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    #[serde(default, rename = "@Green")]
     pub green: Option<Vector3>,
-    #[serde(
-        default,
-        rename = "@Blue",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    #[serde(default, rename = "@Blue")]
     pub blue: Option<Vector3>,
-    #[serde(
-        default,
-        rename = "@WhitePoint",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    #[serde(default, rename = "@WhitePoint")]
     pub white_point: Option<Vector3>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum ColorSpaceEnum {
+pub enum ColorSpaceMode {
     #[serde(rename = "Custom")]
     Custom,
     #[serde(rename = "sRGB")]
@@ -859,7 +754,7 @@ pub struct DmxProfile {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
     #[serde(default, rename = "Point")]
-    pub points: Option<Point>,
+    pub points: Vec<Point>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -876,73 +771,20 @@ pub struct Display {
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(default, rename = "@Texture")]
     pub texture: Option<String>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<DisplayContent>,
+    pub children: Vec<AnyGeometry>,
 }
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum DisplayContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-}
-
-impl Display {}
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Emitter {
     #[serde(rename = "@Name")]
     pub name: Name,
-    #[serde(
-        default,
-        rename = "@Color",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    #[serde(default, rename = "@Color")]
     pub color: Option<Vector3>,
     #[serde(default, rename = "@DominantWaveLength")]
     pub dominant_wave_length: Option<f32>,
@@ -1011,13 +853,10 @@ pub struct FtRdm {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Facet {
     #[serde(default, rename = "@Color")]
-    pub color: Option<String>,
-    #[serde(
-        rename = "@Rotation",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub rotation: Rotation,
+    pub color: CieColor,
+    #[serde(rename = "@Rotation")]
+    // FIXME: Implement rotation struct.
+    pub rotation: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1050,12 +889,7 @@ pub struct FeatureGroups {
 pub struct Filter {
     #[serde(rename = "@Name")]
     pub name: Name,
-    #[serde(
-        default,
-        rename = "@Color",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    #[serde(default, rename = "@Color")]
     pub color: Option<Vector3>,
     #[serde(default, rename = "FilterMeasurement")]
     pub measurements: Vec<FilterMeasurement>,
@@ -1102,10 +936,11 @@ pub struct FixtureType {
     pub thumbnail_offset_x: Option<i32>,
     #[serde(default, rename = "@ThumbnailOffsetY")]
     pub thumbnail_offset_y: Option<i32>,
-    #[serde(default, rename = "@RefFT")]
+    #[serde(default, rename = "@RefFT", deserialize_with = "deserialize_option_uuid")]
     pub ref_ft: Option<Uuid>,
+    // FIXME: Serialize "Yes", "No"
     #[serde(
-        default,
+        default = "FixtureType::default_can_have_children",
         deserialize_with = "deserialize_can_have_children",
         rename = "@CanHaveChildren"
     )]
@@ -1133,6 +968,21 @@ pub struct FixtureType {
 impl FixtureType {
     pub fn default_can_have_children() -> bool {
         true
+    }
+}
+
+// Custom deserializer for Option<Uuid> that returns None if the string is empty or missing
+fn deserialize_option_uuid<'de, D>(deserializer: D) -> Result<Option<Uuid>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Deserialize as _;
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(ref s) if !s.trim().is_empty() => {
+            Uuid::parse_str(s).map(Some).map_err(serde::de::Error::custom)
+        }
+        _ => Ok(None),
     }
 }
 
@@ -1169,59 +1019,19 @@ pub struct Gamuts {
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename = "GDTF")]
 pub struct GdtfDescription {
     #[serde(rename = "@DataVersion")]
     pub data_version: DataVersion,
     #[serde(rename = "FixtureType")]
-    pub fixture_type: FixtureType,
+    pub fixture_types: Vec<FixtureType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Geometries {
     #[serde(default, rename = "$value")]
-    pub content: Vec<GeometriesContent>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum GeometriesContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
+    pub geometries: Vec<AnyGeometry>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1231,63 +1041,15 @@ pub struct GeometryReference {
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(rename = "@Geometry")]
     pub geometry: Name,
+    #[serde(default, rename = "Break")]
+    pub breaks: Vec<Break>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<GeometryReferenceContent>,
+    pub children: Vec<AnyGeometry>,
 }
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum GeometryReferenceContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-    #[serde(rename = "Break")]
-    Break(Break),
-}
-
-impl GeometryReference {}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -1308,69 +1070,21 @@ pub struct Inventory {
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(rename = "@Geometry")]
     pub geometry: Name,
     #[serde(default, rename = "@Count")]
     pub count: Option<i32>,
+    #[serde(default, rename = "Break")]
+    pub breaks: Vec<Break>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<InventoryContent>,
+    pub children: Vec<AnyGeometry>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum InventoryContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-    #[serde(rename = "Break")]
-    Break(Break),
-}
-
-impl Inventory {}
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum LampTypeEnum {
+pub enum LampType {
     #[serde(rename = "Discharge")]
     Discharge,
     #[serde(rename = "Tungsten")]
@@ -1388,13 +1102,8 @@ pub struct Laser {
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(default = "Laser::default_color_type", rename = "@ColorType")]
     pub color_type: LaserColorType,
     #[serde(default, rename = "@Color")]
@@ -1416,50 +1125,9 @@ pub struct Laser {
     #[serde(default, rename = "@ScanSpeed")]
     pub scan_speed: Option<f32>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<LaserContent>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum LaserContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-    #[serde(rename = "Protocol")]
-    Protocol(Protocol),
+    pub children: Vec<AnyGeometry>,
+    #[serde(default, rename = "Protocol")]
+    pub protocols: Vec<Protocol>,
 }
 
 impl Laser {
@@ -1486,12 +1154,19 @@ pub struct LegHeight {
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
+pub struct Weight {
+    #[serde(default, rename = "@Value")]
+    pub value: Option<f32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct LogicalChannel {
     #[serde(rename = "@Attribute")]
     pub attribute: Name,
-    #[serde(default = "LogicalChannel::default_snap", rename = "@Snap")]
+    #[serde(default, rename = "@Snap")]
     pub snap: Snap,
-    #[serde(default = "LogicalChannel::default_master", rename = "@Master")]
+    #[serde(default, rename = "@Master")]
     pub master: Master,
     #[serde(default, rename = "@MibFade")]
     pub mib_fade: Option<f32>,
@@ -1499,15 +1174,6 @@ pub struct LogicalChannel {
     pub dmx_change_time_limit: Option<f32>,
     #[serde(default, rename = "ChannelFunction")]
     pub channel_functions: Vec<ChannelFunction>,
-}
-
-impl LogicalChannel {
-    pub fn default_snap() -> Snap {
-        Snap::No
-    }
-    pub fn default_master() -> Master {
-        Master::None
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1544,9 +1210,10 @@ pub struct Map {
     pub value: Option<u32>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Master {
+    #[default]
     #[serde(rename = "None")]
     None,
     #[serde(rename = "Grand")]
@@ -1569,15 +1236,15 @@ pub struct MeasurementPoint {
 pub struct Model {
     #[serde(rename = "@Name")]
     pub name: Name,
-    #[serde(default = "Model::default_length", rename = "@Length")]
+    #[serde(default, rename = "@Length")]
     pub length: f32,
-    #[serde(default = "Model::default_width", rename = "@Width")]
+    #[serde(default, rename = "@Width")]
     pub width: f32,
-    #[serde(default = "Model::default_height", rename = "@Height")]
+    #[serde(default, rename = "@Height")]
     pub height: f32,
     #[serde(default, rename = "@PrimitiveType")]
-    pub primitive_type: PrimitiveTypeEnum,
-    #[serde(default = "Model::default_file", rename = "@File")]
+    pub primitive_type: PrimitiveType,
+    #[serde(default, rename = "@File")]
     pub file: String,
     #[serde(default, rename = "@SVGOffsetX")]
     pub svg_offset_x: Option<f32>,
@@ -1591,21 +1258,6 @@ pub struct Model {
     pub svg_front_offset_x: Option<f32>,
     #[serde(default, rename = "@SVGFrontOffsetY")]
     pub svg_front_offset_y: Option<f32>,
-}
-
-impl Model {
-    pub fn default_length() -> f32 {
-        0f32
-    }
-    pub fn default_width() -> f32 {
-        0f32
-    }
-    pub fn default_height() -> f32 {
-        0f32
-    }
-    pub fn default_file() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1640,7 +1292,7 @@ pub struct PhysicalDescriptions {
     #[serde(default, rename = "DMXProfiles")]
     pub dmx_profiles: Option<DmxProfiles>,
     #[serde(default, rename = "CRIs")]
-    pub cr_is: Option<CrIs>,
+    pub cr_is: Option<Cris>,
     #[serde(default, rename = "Connectors")]
     pub connectors: Option<Connectors>,
     #[serde(default, rename = "Properties")]
@@ -1744,7 +1396,7 @@ pub struct PowerConsumption {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum PrimitiveTypeEnum {
+pub enum PrimitiveType {
     #[default]
     #[serde(rename = "Undefined")]
     Undefined,
@@ -1787,7 +1439,7 @@ pub enum PropertiesContent {
     #[serde(rename = "OperatingTemperature")]
     OperatingTemperature(OperatingTemperature),
     #[serde(rename = "Weight")]
-    Weight(LegHeight),
+    Weight(Weight),
     #[serde(rename = "PowerConsumption")]
     PowerConsumption(PowerConsumption),
     #[serde(rename = "LegHeight")]
@@ -1798,7 +1450,7 @@ pub enum PropertiesContent {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Protocol {
     #[serde(default, rename = "@Name")]
-    pub name: Option<Name>,
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1809,11 +1461,11 @@ pub struct Protocols {
     #[serde(default, rename = "Art-Net")]
     pub art_net: Option<ArtNet>,
     #[serde(default, rename = "sACN")]
-    pub s_acn: Option<Citp>,
+    pub s_acn: Option<SAcn>,
     #[serde(default, rename = "PosiStageNet")]
-    pub posi_stage_net: Option<Citp>,
+    pub posi_stage_net: Option<PosiStageNet>,
     #[serde(default, rename = "OpenSoundControl")]
-    pub open_sound_control: Option<Citp>,
+    pub open_sound_control: Option<OpenSoundControl>,
     #[serde(default, rename = "CITP")]
     pub citp: Option<Citp>,
 }
@@ -1828,12 +1480,12 @@ pub struct Relation {
     #[serde(rename = "@Follower")]
     pub follower: Node,
     #[serde(rename = "@Type")]
-    pub type_: RelationTypesEnum,
+    pub type_: RelationType,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
-pub enum RelationTypesEnum {
+pub enum RelationType {
     #[serde(rename = "Multiply")]
     Multiply,
     #[serde(rename = "Override")]
@@ -1850,26 +1502,14 @@ pub struct Relations {
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Revision {
-    #[serde(default = "Revision::default_text", rename = "@Text")]
+    #[serde(default, rename = "@Text")]
     pub text: String,
     #[serde(default, rename = "@Date")]
     pub date: Option<String>,
-    #[serde(default = "Revision::default_user_id", rename = "@UserID")]
+    #[serde(default, rename = "@UserID")]
     pub user_id: i32,
-    #[serde(default = "Revision::default_modified_by", rename = "@ModifiedBy")]
+    #[serde(default, rename = "@ModifiedBy")]
     pub modified_by: String,
-}
-
-impl Revision {
-    pub fn default_text() -> String {
-        String::from("")
-    }
-    pub fn default_user_id() -> i32 {
-        0i32
-    }
-    pub fn default_modified_by() -> String {
-        String::from("")
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1884,12 +1524,7 @@ pub struct Revisions {
 pub struct Slot {
     #[serde(rename = "@Name")]
     pub name: String,
-    #[serde(
-        default,
-        rename = "@Color",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
+    #[serde(default, rename = "@Color")]
     pub color: Option<Vector3>,
     #[serde(default, rename = "@Filter")]
     pub filter: Option<Name>,
@@ -1901,11 +1536,12 @@ pub struct Slot {
     pub animation_systems: Vec<AnimationSystem>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum Snap {
     #[serde(rename = "Yes")]
     Yes,
+    #[default]
     #[serde(rename = "No")]
     No,
     #[serde(rename = "On")]
@@ -1930,13 +1566,8 @@ pub struct Structure {
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(rename = "@Geometry")]
     pub geometry: Name,
     #[serde(default, rename = "@LinkedGeometry")]
@@ -1951,54 +1582,11 @@ pub struct Structure {
     pub cross_section_wall_thickness: Option<f32>,
     #[serde(default, rename = "@TrussCrossSection")]
     pub truss_cross_section: Option<String>,
+    #[serde(default, rename = "Break")]
+    pub breaks: Vec<Break>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<StructureContent>,
+    pub children: Vec<AnyGeometry>,
 }
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum StructureContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-    #[serde(rename = "Break")]
-    Break(Break),
-}
-
-impl Structure {}
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -2071,13 +1659,8 @@ pub struct Support {
     pub name: Name,
     #[serde(default, rename = "@Model")]
     pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(rename = "@Geometry")]
     pub geometry: Name,
     #[serde(default, rename = "@SupportType")]
@@ -2115,54 +1698,11 @@ pub struct Support {
     pub resistance_yy: Option<f32>,
     #[serde(default, rename = "@ResistanceZZ")]
     pub resistance_zz: Option<f32>,
+    #[serde(default, rename = "Break")]
+    pub breaks: Vec<Break>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<SupportContent>,
+    pub children: Vec<AnyGeometry>,
 }
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum SupportContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-    #[serde(rename = "Break")]
-    Break(Break),
-}
-
-impl Support {}
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -2233,14 +1773,9 @@ pub struct WiringObject {
     #[serde(rename = "@Name")]
     pub name: Name,
     #[serde(default, rename = "@Model")]
-    pub model: Option<Name>,
-    #[serde(
-        default,
-        rename = "@Position",
-        deserialize_with = "deserialize_option_from_string_none",
-        serialize_with = "serialize_option_as_string_none"
-    )]
-    pub position: Option<Matrix4x3>,
+    pub model: Option<String>,
+    #[serde(default, rename = "@Position")]
+    pub position: Matrix4x4,
     #[serde(default, rename = "@ConnectorType")]
     pub connector_type: Option<String>,
     #[serde(default, rename = "@ComponentType")]
@@ -2276,53 +1811,10 @@ pub struct WiringObject {
     #[serde(default, rename = "@WireGroup")]
     pub wire_group: Option<String>,
     #[serde(default, rename = "$value")]
-    pub content: Vec<WiringObjectContent>,
+    pub children: Vec<AnyGeometry>,
+    #[serde(default, rename = "PinPatch")]
+    pub pin_patches: Vec<PinPatch>,
 }
-
-#[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub enum WiringObjectContent {
-    #[serde(rename = "Geometry")]
-    Geometry(BasicGeometryType),
-    #[serde(rename = "Axis")]
-    Axis(BasicGeometryType),
-    #[serde(rename = "FilterBeam")]
-    FilterBeam(BasicGeometryType),
-    #[serde(rename = "FilterColor")]
-    FilterColor(BasicGeometryType),
-    #[serde(rename = "FilterGobo")]
-    FilterGobo(BasicGeometryType),
-    #[serde(rename = "FilterShaper")]
-    FilterShaper(BasicGeometryType),
-    #[serde(rename = "Beam")]
-    Beam(Beam),
-    #[serde(rename = "MediaServerLayer")]
-    MediaServerLayer(BasicGeometryType),
-    #[serde(rename = "MediaServerCamera")]
-    MediaServerCamera(BasicGeometryType),
-    #[serde(rename = "MediaServerMaster")]
-    MediaServerMaster(BasicGeometryType),
-    #[serde(rename = "Display")]
-    Display(Display),
-    #[serde(rename = "Laser")]
-    Laser(Laser),
-    #[serde(rename = "GeometryReference")]
-    GeometryReference(GeometryReference),
-    #[serde(rename = "WiringObject")]
-    WiringObject(WiringObject),
-    #[serde(rename = "Inventory")]
-    Inventory(Inventory),
-    #[serde(rename = "Structure")]
-    Structure(Structure),
-    #[serde(rename = "Support")]
-    Support(Support),
-    #[serde(rename = "Magnet")]
-    Magnet(BasicGeometryType),
-    #[serde(rename = "PinPatch")]
-    PinPatch(PinPatch),
-}
-
-impl WiringObject {}
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]

@@ -350,7 +350,8 @@ impl fmt::Display for FileName {
 /// Represents a CIE 1931 xyY absolute color point.
 ///
 /// See: MVR Spec Table 1: XML Generic Value Types, ValueType: CIE Color
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct CieColor {
     /// The x chromaticity coordinate.
@@ -359,6 +360,18 @@ pub struct CieColor {
     pub y: f32,
     /// The Y luminance value.
     pub yy: f32,
+}
+
+impl CieColor {
+    pub fn white() -> Self {
+        Self { x: 0.3127, y: 0.3290, yy: 100.0 }
+    }
+}
+
+impl Default for CieColor {
+    fn default() -> Self {
+        Self::white()
+    }
 }
 
 impl str::FromStr for CieColor {
@@ -839,12 +852,12 @@ impl<'de> serde::Deserialize<'de> for Node {
 
 /// A feature identifier `Group.Feature` (exactly 2 `Name` segments).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FeatureId {
+pub struct FeatureType {
     pub group: Name,
     pub feature: Name,
 }
 
-impl FromStr for FeatureId {
+impl FromStr for FeatureType {
     type Err = crate::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -858,26 +871,26 @@ impl FromStr for FeatureId {
 
         let group: Name = a.parse()?;
         let feature: Name = b.parse()?;
-        Ok(FeatureId { group, feature })
+        Ok(FeatureType { group, feature })
     }
 }
 
-impl fmt::Display for FeatureId {
+impl fmt::Display for FeatureType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}", self.group, self.feature)
     }
 }
 
-impl serde::Serialize for FeatureId {
+impl serde::Serialize for FeatureType {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.to_string())
     }
 }
 
-impl<'de> serde::Deserialize<'de> for FeatureId {
+impl<'de> serde::Deserialize<'de> for FeatureType {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
-        s.parse::<FeatureId>().map_err(serde::de::Error::custom)
+        s.parse::<FeatureType>().map_err(serde::de::Error::custom)
     }
 }
 
@@ -1028,6 +1041,12 @@ impl DmxValue {
         }
 
         Ok(DmxValue { value, bytes, shifting })
+    }
+}
+
+impl Default for DmxValue {
+    fn default() -> Self {
+        Self { value: 0, bytes: 1, shifting: false }
     }
 }
 
