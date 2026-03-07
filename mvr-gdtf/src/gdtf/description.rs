@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::gdtf::{
     DmxAddress, DmxBreak, DmxOffset, DmxValue, Matrix4x4, Name, Node, PhysicalValue, Vector3,
 };
-use crate::{CieColor, deserialize_option_from_string_none, serialize_option_as_string_none};
+use crate::{CieColor, deserialize_option_from_string_none};
 
 /// A data version string formatted as `major.minor` where each is a u8.
 ///
@@ -46,12 +46,6 @@ impl fmt::Display for DataVersion {
     }
 }
 
-impl serde::Serialize for DataVersion {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
 impl<'de> serde::Deserialize<'de> for DataVersion {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
@@ -60,28 +54,28 @@ impl<'de> serde::Deserialize<'de> for DataVersion {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ActivationGroup {
     #[serde(rename = "@Name")]
     pub name: Name,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ActivationGroups {
     #[serde(default, rename = "ActivationGroup")]
     pub activation_group: Vec<ActivationGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct AdditionalColorSpaces {
     #[serde(default, rename = "ColorSpace")]
     pub color_spaces: Vec<ColorSpace>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct AnimationSystem {
     #[serde(
         rename = "@P1",
@@ -125,21 +119,15 @@ where
     Ok((first, second))
 }
 
-fn serialize_two_array<S>(tuple: &(f32, f32), serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    serializer.serialize_str(&format!("{},{}", tuple.0, tuple.1))
-}
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ArtNet {
     #[serde(default, rename = "Map")]
     pub maps: Vec<Map>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Attribute {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -160,7 +148,7 @@ pub struct Attribute {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct AttributeDefinitions {
     #[serde(default, rename = "ActivationGroups")]
     pub activation_groups: Option<ActivationGroups>,
@@ -171,14 +159,14 @@ pub struct AttributeDefinitions {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Attributes {
     #[serde(default, rename = "Attribute")]
     pub attributes: Vec<Attribute>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Geometry {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -191,7 +179,7 @@ pub struct Geometry {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum AnyGeometry {
     #[serde(rename = "Geometry")]
     Geometry(Geometry),
@@ -232,7 +220,7 @@ pub enum AnyGeometry {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Beam {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -269,7 +257,7 @@ pub struct Beam {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum BeamType {
     #[serde(rename = "Wash")]
     Wash,
@@ -288,7 +276,7 @@ pub enum BeamType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Break {
     #[serde(default, rename = "@DMXOffset")]
     pub dmx_offset: DmxAddress,
@@ -303,7 +291,7 @@ impl Break {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum Ces {
     #[default]
     #[serde(rename = "CES01")]
@@ -507,26 +495,26 @@ pub enum Ces {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct SAcn {
     #[serde(default, rename = "Map")]
     pub maps: Vec<Map>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct PosiStageNet;
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct OpenSoundControl;
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Citp;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Cri {
     #[serde(default, rename = "@CES")]
     pub ces: Ces,
@@ -535,7 +523,7 @@ pub struct Cri {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct CriGroup {
     #[serde(default, rename = "@ColorTemperature")]
     pub color_temperature: Option<f32>,
@@ -544,14 +532,14 @@ pub struct CriGroup {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Cris {
     #[serde(default, rename = "CRIGroup")]
     pub cri_groups: Vec<CriGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ChannelFunction {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
@@ -608,7 +596,7 @@ impl ChannelFunction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ChannelSet {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
@@ -623,7 +611,7 @@ pub struct ChannelSet {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ColorSpace {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
@@ -640,7 +628,7 @@ pub struct ColorSpace {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum ColorSpaceMode {
     #[serde(rename = "Custom")]
     Custom,
@@ -654,7 +642,7 @@ pub enum ColorSpaceMode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Connector {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -669,14 +657,14 @@ pub struct Connector {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Connectors {
     #[serde(default, rename = "Connector")]
     pub connectors: Vec<Connector>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum CrossSectionType {
     #[serde(rename = "TrussFramework")]
     TrussFramework,
@@ -685,7 +673,7 @@ pub enum CrossSectionType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct DmxChannel {
     #[serde(default, rename = "@DMXBreak")]
     pub dmx_break: DmxBreak,
@@ -712,14 +700,14 @@ pub struct DmxChannel {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct DmxChannels {
     #[serde(default, rename = "DMXChannel")]
     pub dmx_channels: Vec<DmxChannel>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct DmxMode {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -736,14 +724,14 @@ pub struct DmxMode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct DmxModes {
     #[serde(default, rename = "DMXMode")]
     pub dmx_modes: Vec<DmxMode>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct DmxPersonality {
     #[serde(default, rename = "@Value")]
     pub value: Option<String>,
@@ -752,7 +740,7 @@ pub struct DmxPersonality {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct DmxProfile {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
@@ -761,14 +749,14 @@ pub struct DmxProfile {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct DmxProfiles {
     #[serde(default, rename = "DMXProfile")]
     pub dmx_profiles: Vec<DmxProfile>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Display {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -783,7 +771,7 @@ pub struct Display {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Emitter {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -798,7 +786,7 @@ pub struct Emitter {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct EmitterMeasurement {
     #[serde(rename = "@Physical")]
     pub physical: PhysicalValue,
@@ -813,14 +801,14 @@ pub struct EmitterMeasurement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Emitters {
     #[serde(default, rename = "Emitter")]
     pub emitters: Vec<Emitter>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FtMacro {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -831,18 +819,18 @@ pub struct FtMacro {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FtMacros {
     #[serde(default, rename = "FTMacro")]
     pub ft_macros: Vec<FtMacro>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FtPresets;
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FtRdm {
     #[serde(default, rename = "@ManufacturerID")]
     pub manufacturer_id: Option<String>,
@@ -853,7 +841,7 @@ pub struct FtRdm {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Facet {
     #[serde(default, rename = "@Color")]
     pub color: CieColor,
@@ -863,7 +851,7 @@ pub struct Facet {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FeatureGroup {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -874,21 +862,21 @@ pub struct FeatureGroup {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Feature {
     #[serde(rename = "@Name")]
     pub name: Name,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FeatureGroups {
     #[serde(default, rename = "FeatureGroup")]
     pub feature_group: Vec<FeatureGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Filter {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -899,7 +887,7 @@ pub struct Filter {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FilterMeasurement {
     #[serde(rename = "@Physical")]
     pub physical: PhysicalValue,
@@ -912,14 +900,14 @@ pub struct FilterMeasurement {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Filters {
     #[serde(default, rename = "Filter")]
     pub filters: Vec<Filter>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FixtureType {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1005,7 +993,7 @@ where
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Gamut {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
@@ -1014,14 +1002,14 @@ pub struct Gamut {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Gamuts {
     #[serde(default, rename = "Gamut")]
     pub gamuts: Vec<Gamut>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 #[serde(rename = "GDTF")]
 pub struct GdtfDescription {
     #[serde(rename = "@DataVersion")]
@@ -1031,14 +1019,14 @@ pub struct GdtfDescription {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Geometries {
     #[serde(default, rename = "$value")]
     pub geometries: Vec<AnyGeometry>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct GeometryReference {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1055,7 +1043,7 @@ pub struct GeometryReference {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum InterpolationTo {
     #[default]
     #[serde(rename = "Linear")]
@@ -1067,7 +1055,7 @@ pub enum InterpolationTo {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Inventory {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1086,7 +1074,7 @@ pub struct Inventory {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum LampType {
     #[serde(rename = "Discharge")]
     Discharge,
@@ -1099,7 +1087,7 @@ pub enum LampType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Laser {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1140,7 +1128,7 @@ impl Laser {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum LaserColorType {
     #[serde(rename = "RGB")]
     Rgb,
@@ -1149,21 +1137,21 @@ pub enum LaserColorType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct LegHeight {
     #[serde(default, rename = "@Value")]
     pub value: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Weight {
     #[serde(default, rename = "@Value")]
     pub value: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct LogicalChannel {
     #[serde(rename = "@Attribute")]
     pub attribute: Name,
@@ -1180,14 +1168,14 @@ pub struct LogicalChannel {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct MacroDmx {
     #[serde(default, rename = "MacroDMXStep")]
     pub macro_dmx_steps: Vec<MacroDmxStep>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct MacroDmxStep {
     #[serde(default, rename = "@Duration")]
     pub duration: Option<f32>,
@@ -1196,7 +1184,7 @@ pub struct MacroDmxStep {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct MacroDmxValue {
     #[serde(rename = "@Value")]
     pub value: DmxValue,
@@ -1205,7 +1193,7 @@ pub struct MacroDmxValue {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Map {
     #[serde(default, rename = "@Key")]
     pub key: Option<u32>,
@@ -1214,7 +1202,7 @@ pub struct Map {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum Master {
     #[default]
     #[serde(rename = "None")]
@@ -1226,7 +1214,7 @@ pub enum Master {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct MeasurementPoint {
     #[serde(rename = "@WaveLength")]
     pub wave_length: f32,
@@ -1235,7 +1223,7 @@ pub struct MeasurementPoint {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Model {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1264,14 +1252,14 @@ pub struct Model {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Models {
     #[serde(default, rename = "Model")]
     pub models: Vec<Model>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct OperatingTemperature {
     #[serde(default, rename = "@Low")]
     pub low: Option<f32>,
@@ -1280,7 +1268,7 @@ pub struct OperatingTemperature {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct PhysicalDescriptions {
     #[serde(default, rename = "Emitters")]
     pub emitters: Option<Emitters>,
@@ -1303,7 +1291,7 @@ pub struct PhysicalDescriptions {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum PhysicalUnitType {
     #[default]
     #[serde(rename = "None")]
@@ -1353,7 +1341,7 @@ pub enum PhysicalUnitType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct PinPatch {
     #[serde(default, rename = "@ToWiringObject")]
     pub to_wiring_object: Option<Node>,
@@ -1364,7 +1352,7 @@ pub struct PinPatch {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Point {
     #[serde(default, rename = "@DMXPercentage")]
     pub dmx_percentage: Option<f32>,
@@ -1379,7 +1367,7 @@ pub struct Point {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct PowerConsumption {
     #[serde(default, rename = "@Value")]
     pub value: Option<f32>,
@@ -1398,7 +1386,7 @@ pub struct PowerConsumption {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum PrimitiveType {
     #[default]
     #[serde(rename = "Undefined")]
@@ -1430,14 +1418,14 @@ pub enum PrimitiveType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Properties {
     #[serde(default, rename = "$value")]
     pub content: Vec<PropertiesContent>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum PropertiesContent {
     #[serde(rename = "OperatingTemperature")]
     OperatingTemperature(OperatingTemperature),
@@ -1450,14 +1438,14 @@ pub enum PropertiesContent {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Protocol {
     #[serde(default, rename = "@Name")]
     pub name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Protocols {
     #[serde(default, rename = "FTRDM")]
     pub ftrdm: Option<FtRdm>,
@@ -1474,7 +1462,7 @@ pub struct Protocols {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Relation {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1487,7 +1475,7 @@ pub struct Relation {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum RelationType {
     #[serde(rename = "Multiply")]
     Multiply,
@@ -1496,14 +1484,14 @@ pub enum RelationType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Relations {
     #[serde(default, rename = "Relation")]
     pub relations: Vec<Relation>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Revision {
     #[serde(default, rename = "@Text")]
     pub text: String,
@@ -1516,14 +1504,14 @@ pub struct Revision {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Revisions {
     #[serde(default, rename = "Revision")]
     pub revisions: Vec<Revision>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Slot {
     #[serde(rename = "@Name")]
     pub name: String,
@@ -1540,7 +1528,7 @@ pub struct Slot {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum Snap {
     #[serde(rename = "Yes")]
     Yes,
@@ -1554,7 +1542,7 @@ pub enum Snap {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct SoftwareVersionId {
     #[serde(default, rename = "@Value")]
     pub value: Option<String>,
@@ -1563,7 +1551,7 @@ pub struct SoftwareVersionId {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Structure {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1592,7 +1580,7 @@ pub struct Structure {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum StructureType {
     #[serde(rename = "CenterLineBased")]
     CenterLineBased,
@@ -1601,7 +1589,7 @@ pub enum StructureType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct SubChannelSet {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
@@ -1616,7 +1604,7 @@ pub struct SubChannelSet {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum SubPhysicalType {
     #[serde(rename = "PlacementOffset")]
     PlacementOffset,
@@ -1643,7 +1631,7 @@ pub enum SubPhysicalType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct SubPhysicalUnit {
     #[serde(default, rename = "@Type")]
     pub type_: Option<SubPhysicalType>,
@@ -1656,7 +1644,7 @@ pub struct SubPhysicalUnit {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Support {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1708,7 +1696,7 @@ pub struct Support {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum SupportType {
     #[serde(rename = "Rope")]
     Rope,
@@ -1717,7 +1705,7 @@ pub enum SupportType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Wheel {
     #[serde(default, rename = "@Name")]
     pub name: Option<Name>,
@@ -1726,14 +1714,14 @@ pub struct Wheel {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Wheels {
     #[serde(default, rename = "Wheel")]
     pub wheels: Vec<Wheel>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum WiringComponentType {
     #[serde(rename = "Input")]
     Input,
@@ -1756,7 +1744,7 @@ pub enum WiringComponentType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum WiringFuseRating {
     #[serde(rename = "B")]
     B,
@@ -1771,7 +1759,7 @@ pub enum WiringFuseRating {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct WiringObject {
     #[serde(rename = "@Name")]
     pub name: Name,
@@ -1820,7 +1808,7 @@ pub struct WiringObject {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum WiringOrientation {
     #[serde(rename = "Left")]
     Left,

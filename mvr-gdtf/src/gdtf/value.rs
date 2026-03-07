@@ -1,7 +1,5 @@
 use std::{fmt, str};
 
-use derive_more::{Debug, Display, FromStr};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DmxValue {
     value: u32,
@@ -78,12 +76,6 @@ impl fmt::Display for DmxValue {
     }
 }
 
-impl serde::Serialize for DmxValue {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
 impl<'de> serde::Deserialize<'de> for DmxValue {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
@@ -141,12 +133,6 @@ impl str::FromStr for DmxOffset {
     }
 }
 
-impl serde::Serialize for DmxOffset {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
 impl<'de> serde::Deserialize<'de> for DmxOffset {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
@@ -169,8 +155,7 @@ impl<'de> serde::Deserialize<'de> for DmxOffset {
 /// assert!(DmxAddress::new(0).is_none());
 /// assert!(DmxAddress::new(513).is_none());
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display)]
-#[display("{}", _0)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DmxAddress(u16);
 
 impl DmxAddress {
@@ -210,11 +195,9 @@ impl Default for DmxAddress {
     }
 }
 
-impl TryFrom<u16> for DmxAddress {
-    type Error = crate::gdtf::Error;
-
-    fn try_from(value: u16) -> Result<Self, Self::Error> {
-        DmxAddress::new(value)
+impl fmt::Display for DmxAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -230,9 +213,11 @@ impl str::FromStr for DmxAddress {
     }
 }
 
-impl serde::Serialize for DmxAddress {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_u16(self.0)
+impl TryFrom<u16> for DmxAddress {
+    type Error = crate::gdtf::Error;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        DmxAddress::new(value)
     }
 }
 
@@ -261,19 +246,26 @@ impl<'de> serde::Deserialize<'de> for DmxAddress {
 /// assert!("abc".parse::<DmxBreak>().is_err());
 /// assert!("0".parse::<DmxBreak>().is_err());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DmxBreak {
     /// Indicates the break should be overwritten.
-    #[display("Overwrite")]
     Overwrite,
     /// A non-zero u16 representing the DMX break.
-    #[display("{}", _0)]
     Number(u16),
 }
 
 impl Default for DmxBreak {
     fn default() -> Self {
         Self::Number(1)
+    }
+}
+
+impl fmt::Display for DmxBreak {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Overwrite => write!(f, "Overwrite"),
+            Self::Number(n) => write!(f, "{}", n),
+        }
     }
 }
 
@@ -292,12 +284,6 @@ impl str::FromStr for DmxBreak {
                 }),
             }
         }
-    }
-}
-
-impl serde::Serialize for DmxBreak {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -410,12 +396,6 @@ impl str::FromStr for Matrix4x4 {
     }
 }
 
-impl serde::Serialize for Matrix4x4 {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
 impl<'de> serde::Deserialize<'de> for Matrix4x4 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
@@ -423,8 +403,7 @@ impl<'de> serde::Deserialize<'de> for Matrix4x4 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Display)]
-#[display("{}", _0)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Name(String);
 
 impl Name {
@@ -464,6 +443,12 @@ impl Name {
     }
 }
 
+impl fmt::Display for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl str::FromStr for Name {
     type Err = crate::gdtf::Error;
 
@@ -473,12 +458,6 @@ impl str::FromStr for Name {
         } else {
             Err(crate::gdtf::Error::NameInvalid { misformatted_string: s.to_owned() })
         }
-    }
-}
-
-impl serde::Serialize for Name {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.as_str())
     }
 }
 
@@ -534,12 +513,6 @@ impl fmt::Display for Node {
     }
 }
 
-impl serde::Serialize for Node {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
 impl<'de> serde::Deserialize<'de> for Node {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
@@ -548,8 +521,7 @@ impl<'de> serde::Deserialize<'de> for Node {
 }
 
 /// Represents a physical DMX percentage value.
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Display, FromStr)]
-#[display("{}", _0)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct PhysicalValue(f32);
 
 impl PhysicalValue {
@@ -577,6 +549,12 @@ impl PhysicalValue {
     }
 }
 
+impl fmt::Display for PhysicalValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl TryFrom<f32> for PhysicalValue {
     type Error = crate::gdtf::Error;
 
@@ -590,16 +568,10 @@ impl TryFrom<f32> for PhysicalValue {
     }
 }
 
-impl serde::Serialize for PhysicalValue {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_f32(self.0)
-    }
-}
-
 impl<'de> serde::Deserialize<'de> for PhysicalValue {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let v = f32::deserialize(deserializer)?;
-        PhysicalValue::new(v).map_err(serde::de::Error::custom)
+        let value = f32::deserialize(deserializer)?;
+        PhysicalValue::new(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -665,12 +637,6 @@ impl str::FromStr for Vector3 {
 impl fmt::Display for Vector3 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{},{},{}", self.x, self.y, self.z)
-    }
-}
-
-impl serde::Serialize for Vector3 {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
     }
 }
 

@@ -41,17 +41,3 @@ where
             .map_err(|e| serde::de::Error::custom(format!("Failed to parse: {}", e))),
     }
 }
-
-pub(crate) fn serialize_option_as_string_none<S, T>(
-    value: &Option<T>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-    T: std::fmt::Display,
-{
-    match value {
-        None => serializer.serialize_str("None"),
-        Some(v) => serializer.serialize_str(&v.to_string()),
-    }
-}

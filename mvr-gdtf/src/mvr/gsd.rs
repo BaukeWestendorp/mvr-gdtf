@@ -7,7 +7,7 @@ use crate::CieColor;
 use crate::mvr::{FileName, Matrix4x3};
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct GeneralSceneDescription {
     #[serde(rename = "@verMajor")]
     pub ver_major: u32,
@@ -24,7 +24,7 @@ pub struct GeneralSceneDescription {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct AuxData {
     #[serde(default, rename = "Class")]
     pub class: Vec<BasicChildListAttribute>,
@@ -37,7 +37,7 @@ pub struct AuxData {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Address {
     #[serde(default, rename = "@break")]
     pub break_: u32,
@@ -46,7 +46,7 @@ pub struct Address {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Addresses {
     #[serde(default, rename = "Address")]
     pub address: Vec<Address>,
@@ -55,7 +55,7 @@ pub struct Addresses {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Alignment {
     #[serde(default, rename = "@geometry")]
     pub geometry: Option<String>,
@@ -76,7 +76,7 @@ impl Alignment {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Alignments {
     #[serde(default, rename = "Alignment")]
     alignments: Vec<Alignment>,
@@ -136,7 +136,7 @@ impl From<Alignments> for Vec<Alignment> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct BasicChildListAttribute {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -145,7 +145,7 @@ pub struct BasicChildListAttribute {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct ChildList {
     #[serde(default, rename = "$value")]
     pub contents: Vec<ChildListContent>,
@@ -205,7 +205,7 @@ impl From<ChildList> for Vec<ChildListContent> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum ChildListContent {
     #[serde(rename = "SceneObject")]
     SceneObject(SceneObject),
@@ -226,7 +226,7 @@ pub enum ChildListContent {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Connection {
     #[serde(rename = "@own")]
     pub own: String,
@@ -237,7 +237,7 @@ pub struct Connection {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Connections {
     #[serde(default, rename = "Connection")]
     pub connections: Vec<Connection>,
@@ -296,7 +296,7 @@ impl From<Connections> for Vec<Connection> {
     }
 }
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct CustomCommands {
     #[serde(default, rename = "CustomCommand")]
     commands: Vec<String>,
@@ -356,7 +356,7 @@ impl From<CustomCommands> for Vec<String> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Data {
     #[serde(rename = "@provider")]
     pub provider: String,
@@ -371,7 +371,7 @@ impl Data {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Fixture {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -436,7 +436,7 @@ pub struct Fixture {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct FocusPoint {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -451,7 +451,7 @@ pub struct FocusPoint {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Geometries {
     #[serde(default, rename = "Geometry3D")]
     pub geometry_3d: Vec<Geometry3D>,
@@ -460,7 +460,7 @@ pub struct Geometries {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Geometry3D {
     #[serde(rename = "@fileName")]
     pub file_name: FileName,
@@ -469,14 +469,14 @@ pub struct Geometry3D {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Gobo {
     #[serde(default, rename = "@rotation")]
     pub rotation: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct GroupObject {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -491,7 +491,7 @@ pub struct GroupObject {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Layer {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -504,7 +504,7 @@ pub struct Layer {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Layers {
     #[serde(default, rename = "Layer")]
     layers: Vec<Layer>,
@@ -564,7 +564,7 @@ impl From<Layers> for Vec<Layer> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Mapping {
     #[serde(rename = "@linkedDef")]
     pub linked_def: Uuid,
@@ -581,7 +581,7 @@ pub struct Mapping {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct MappingDefinition {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -598,14 +598,14 @@ pub struct MappingDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Mappings {
     #[serde(default, rename = "Mapping")]
     pub mapping: Vec<Mapping>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Network {
     #[serde(rename = "@geometry")]
     pub geometry: String,
@@ -622,7 +622,7 @@ pub struct Network {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Overwrite {
     #[serde(rename = "@universal")]
     pub universal: String,
@@ -631,14 +631,14 @@ pub struct Overwrite {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Overwrites {
     #[serde(default, rename = "Overwrite")]
     pub overwrite: Vec<Overwrite>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Projection {
     #[serde(default, rename = "Source")]
     pub source: Vec<Source>,
@@ -647,14 +647,14 @@ pub struct Projection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Projections {
     #[serde(default, rename = "Projection")]
     pub projection: Vec<Projection>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Projector {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -703,7 +703,7 @@ pub struct Projector {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Protocol {
     #[serde(default = "Protocol::default_geometry", rename = "@geometry")]
     pub geometry: String,
@@ -724,14 +724,14 @@ impl Protocol {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Protocols {
     #[serde(default, rename = "Protocol")]
     pub protocol: Vec<Protocol>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Scene {
     #[serde(default, rename = "AUXData")]
     pub aux_data: Option<AuxData>,
@@ -740,7 +740,7 @@ pub struct Scene {
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 #[serde(transparent, rename = "ScaleHandeling")]
 pub struct ScaleHandling(#[serde(rename = "$text")] pub ScaleHandlingType);
 
@@ -759,7 +759,7 @@ impl ops::DerefMut for ScaleHandling {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct SceneObject {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -806,7 +806,7 @@ pub struct SceneObject {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Source {
     #[serde(rename = "@linkedGeometry")]
     pub linked_geometry: String,
@@ -817,7 +817,7 @@ pub struct Source {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum SourceType {
     #[serde(rename = "NDI")]
     Ndi,
@@ -830,14 +830,14 @@ pub enum SourceType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Sources {
     #[serde(default, rename = "Source")]
     pub source: Vec<Source>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Support {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -890,7 +890,7 @@ pub struct Support {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Symbol {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -901,7 +901,7 @@ pub struct Symbol {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Symdef {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -912,7 +912,7 @@ pub struct Symdef {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum TransmissionType {
     #[serde(rename = "Unicast")]
     Unicast,
@@ -925,7 +925,7 @@ pub enum TransmissionType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct Truss {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -978,14 +978,14 @@ pub struct Truss {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct UserData {
     #[serde(default, rename = "Data")]
     pub data: Vec<Data>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub struct VideoScreen {
     #[serde(rename = "@uuid")]
     pub uuid: Uuid,
@@ -1036,7 +1036,7 @@ pub struct VideoScreen {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 pub enum ScaleHandlingType {
     #[default]
     #[serde(rename = "ScaleKeepRatio")]

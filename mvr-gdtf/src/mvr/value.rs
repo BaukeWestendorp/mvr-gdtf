@@ -1,12 +1,9 @@
 use std::{fmt, str};
 
-use derive_more::Display;
-
 /// A case-sensitive name of a file within the MVR archive, including the extension.
 ///
 /// See: MVR Spec Table 1: XML Generic Value Types, ValueType: FileName
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
-#[display("{}", _0)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FileName(String);
 
 impl FileName {
@@ -51,9 +48,9 @@ impl str::FromStr for FileName {
     }
 }
 
-impl serde::Serialize for FileName {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(self.as_str())
+impl fmt::Display for FileName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -147,12 +144,6 @@ impl str::FromStr for Matrix4x3 {
         }
 
         Ok(Self { data })
-    }
-}
-
-impl serde::Serialize for Matrix4x3 {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
     }
 }
 

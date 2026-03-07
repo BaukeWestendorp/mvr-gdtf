@@ -14,7 +14,6 @@ uuid = { version = "1.21.0", features = ["serde", "v4"] }
 
 thiserror = "2.0.18"
 regex = "1.12.3"
-derive_more = { version = "2.1.1", features = ["full"] }
 
 [lints]
 workspace = true
