@@ -19,12 +19,14 @@ This library is designed for parsing and extracting data from MVR and GDTF files
 </details>
 
 ## Beta Release Roadmap
+- [ ] Completely parse shared files into Rust data types.
 - [ ] Completely parse GDTF files into Rust data types.
 - [ ] Completely parse MVR files into Rust data types.
-- [ ] Add methods to get values directly from the parsed data (Maybe mirror [libMVRgdtf](https://github.com/mvrdevelopment/libMVRgdtf))
+- [ ] Resource files management.
+- [ ] Add methods to get values directly from the parsed data (Maybe mirror [libMVRgdtf](https://github.com/mvrdevelopment/libMVRgdtf)).
 - [ ] Add lookups to get computed values (like channel counts or absolute DMX offsets) quickly.
-- [ ] Unit tests. (Maybe mirror [libMVRgdtf](https://github.com/mvrdevelopment/libMVRgdtf)'s testsuite)
-- [ ] Add usage examples
+- [ ] Unit tests (Maybe mirror [libMVRgdtf](https://github.com/mvrdevelopment/libMVRgdtf)'s testsuite).
+- [ ] Add usage examples.
 
 ## Contributing
 Contributions are welcome. If you find a file that this library fails to parse correctly or want to request a feature or suggest a change, feel free to open an issue!
