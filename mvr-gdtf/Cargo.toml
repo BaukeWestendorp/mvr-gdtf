@@ -6,14 +6,12 @@ edition.workspace = true
 [dependencies]
 zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
 
-xsd-parser-types = "0.1.2"
 quick-xml = { version = "0.39.2", features = ["serialize"] }
 serde = { version = "1.0.228", features = ["derive"] }
 
 uuid = { version = "1.21.0", features = ["serde", "v4"] }
 
 thiserror = "2.0.18"
-regex = "1.12.3"
 
 [lints]
 workspace = true
