@@ -13,7 +13,7 @@ Because these formats support thousands of devices across multiple manufacturers
 `mvr-gdtf` abstracts this complexity by providing lookup tables and high-level helper functions. The goal is to let you extract the data you actually need without navigating the deep, nested specifications of the underlying XML. Though, if you want to manually find anything defined in the description files, you can.
 
 <details>
-    <summary><strong>Note:</strong> This library is currently <strong>read-only<strong>. Modifying or re-serializing MVR/GDTF data is not supported. <em>Why?</em></summary>
+    <summary><strong>Note:</strong> This library is currently <strong>read-only</strong>. Modifying or re-serializing MVR/GDTF data is not supported. <em>Why?</em></summary>
 
 This library is designed for parsing and extracting data from MVR and GDTF files, not for editing or generating them. Adding support for modification and re-serialization would mean managing the lookups would become a lot more complicated (and in some cases slower). In the future, I might reconsider adding serialization support if I find the time and a nice way to handle this.
 </details>
