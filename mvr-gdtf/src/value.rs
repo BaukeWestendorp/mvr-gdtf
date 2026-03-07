@@ -102,7 +102,7 @@ impl CieColor {
     }
 
     pub fn to_rgb(&self) -> (f32, f32, f32) {
-        // CREDIT(Copyright MVR Group): https://github.com/mvrdevelopment/libMVRgdtf/blob/0b5fbaf2c04f2e4bcc0bc9929fa0097489cac72a/src/CieColor.cpp#L83-L84
+        // CREDIT(Copyright MVR Group): https://github.com/mvrdevelopment/libMVRgdtf/blob/0b5fbaf2c04f2e4bcc0bc9929fa0097489cac72a/src/CieColor.cpp#L83
 
         // Conversion formulas/matrix from http://www.brucelindbloom.com/
         let x = self.x;

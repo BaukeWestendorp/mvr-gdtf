@@ -19,7 +19,7 @@ This library is designed for parsing and extracting data from MVR and GDTF files
 </details>
 
 ## Beta Release Roadmap
-- [ ] Completely parse shared files into Rust data types.
+- [x] Completely parse shared files into Rust data types.
 - [ ] Completely parse GDTF files into Rust data types.
 - [ ] Completely parse MVR files into Rust data types.
 - [ ] Resource files management.
