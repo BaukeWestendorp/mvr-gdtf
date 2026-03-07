@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use mvr_gdtf::gdtf::GdtfFile;
 
 fn main() {
@@ -17,9 +19,10 @@ fn main() {
         }
     };
     let entries: Vec<_> = entries.collect::<Result<Vec<_>, _>>().unwrap();
-    let total = entries.len();
-    let mut error_count = 0;
-    for (idx, entry) in entries.into_iter().enumerate() {
+
+    let mut versions = HashMap::new();
+
+    for entry in entries {
         let path = entry.path();
         if path.is_file() {
             let file_name = match path.file_name() {
@@ -29,18 +32,28 @@ fn main() {
 
             let result = GdtfFile::load_from_file(&path);
             match result {
-                Ok(_) => {
-                    // println!("\x1b[32m{:0>4}/{:0<4}:  OK - {}\x1b[0m", idx, total, file_name);
+                Ok(gdtf_file) => {
+                    let v = (
+                        gdtf_file.description().data_version.major,
+                        gdtf_file.description().data_version.minor,
+                    );
+                    versions.entry(v).or_insert_with(VersionData::default).count += 1;
+                    let fixture_type_count = gdtf_file.description().fixture_types.len();
+                    let entry = versions.entry(v).or_insert_with(VersionData::default);
+                    if fixture_type_count > entry.max_fixture_type_count {
+                        entry.max_fixture_type_count = fixture_type_count;
+                    }
                 }
                 Err(e) => {
-                    error_count += 1;
-                    println!(
-                        "\x1b[31m{:0>4}/{:0<4}: ERR - {} ({})\x1b[0m",
-                        idx, total, file_name, e
-                    );
+                    println!("{e} --- {}", file_name);
                 }
             }
         }
     }
-    println!("Total errors: {}", error_count);
+}
+
+#[derive(Debug, Default)]
+struct VersionData {
+    count: usize,
+    max_fixture_type_count: usize,
 }

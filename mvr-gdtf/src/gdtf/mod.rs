@@ -1,12 +1,16 @@
-mod desc;
-
 use std::{fs::File, io::Read as _, path::Path};
 
 use zip::ZipArchive;
 
 use crate::{Resource, load_zip};
 
-pub use desc::*;
+mod description;
+mod error;
+mod value;
+
+pub use description::*;
+pub use error::*;
+pub use value::*;
 
 pub struct GdtfFile {
     description: GdtfDescription,
@@ -35,14 +39,15 @@ impl GdtfFile {
 fn load_description(zip: &mut ZipArchive<File>) -> Result<GdtfDescription, crate::Error> {
     const FILE_NAME: &str = "description.xml";
 
-    let mut xml_file =
-        zip.by_name(FILE_NAME).map_err(|e| crate::Error::MissingDescriptionXml { source: e })?;
+    let mut xml_file = zip
+        .by_name(FILE_NAME)
+        .map_err(|e| crate::gdtf::Error::MissingDescriptionXml { source: e })?;
 
     let mut xml_string = String::new();
     xml_file.read_to_string(&mut xml_string)?;
 
     let gsd = quick_xml::de::from_str(&xml_string)
-        .map_err(|e| crate::Error::ParseDescription { source: e })?;
+        .map_err(|e| crate::gdtf::Error::ParseDescription { source: e })?;
 
     Ok(gsd)
 }

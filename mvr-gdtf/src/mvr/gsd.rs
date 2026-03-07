@@ -3,7 +3,8 @@ use std::ops::{self, Deref, DerefMut};
 
 use uuid::Uuid;
 
-use crate::{CieColor, FileName, Matrix4x3};
+use crate::CieColor;
+use crate::mvr::{FileName, Matrix4x3};
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]

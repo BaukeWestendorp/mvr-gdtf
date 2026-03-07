@@ -6,10 +6,10 @@ pub mod gdtf;
 pub mod mvr;
 
 mod error;
-mod values;
+mod value;
 
 pub use error::*;
-pub use values::*;
+pub use value::*;
 
 pub struct Resource {}
 

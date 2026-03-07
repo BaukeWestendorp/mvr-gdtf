@@ -1,11 +1,16 @@
-mod gsd;
-
 use std::{fs::File, io::Read as _, path::Path};
 
-pub use gsd::*;
 use zip::ZipArchive;
 
 use crate::{Resource, gdtf::GdtfFile, load_zip};
+
+mod error;
+mod gsd;
+mod value;
+
+pub use error::*;
+pub use gsd::*;
+pub use value::*;
 
 pub struct MvrFile {
     general_scene_description: GeneralSceneDescription,
@@ -43,13 +48,13 @@ fn load_general_scene_description(
 
     let mut xml_file = zip
         .by_name(FILE_NAME)
-        .map_err(|e| crate::Error::MissingGeneralSceneDescriptionXml { source: e })?;
+        .map_err(|e| crate::mvr::Error::MissingGeneralSceneDescriptionXml { source: e })?;
 
     let mut xml_string = String::new();
     xml_file.read_to_string(&mut xml_string)?;
 
     let gsd = quick_xml::de::from_str(&xml_string)
-        .map_err(|e| crate::Error::ParseGeneralSceneDescription { source: e })?;
+        .map_err(|e| crate::mvr::Error::ParseGeneralSceneDescription { source: e })?;
 
     Ok(gsd)
 }

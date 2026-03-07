@@ -6,10 +6,10 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::{
-    CieColor, DmxAddress, DmxBreak, DmxOffset, DmxValue, FeatureType, Matrix4x4, Name, Node,
-    PhysicalValue, Vector3, deserialize_option_from_string_none, serialize_option_as_string_none,
+use crate::gdtf::{
+    DmxAddress, DmxBreak, DmxOffset, DmxValue, Matrix4x4, Name, Node, PhysicalValue, Vector3,
 };
+use crate::{CieColor, deserialize_option_from_string_none, serialize_option_as_string_none};
 
 /// A data version string formatted as `major.minor` where each is a u8.
 ///
@@ -21,17 +21,20 @@ pub struct DataVersion {
 }
 
 impl str::FromStr for DataVersion {
-    type Err = crate::Error;
+    type Err = crate::gdtf::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
-        let (maj_s, min_s) =
-            s.split_once('.').ok_or_else(|| crate::Error::InvalidDataVersion(s.to_owned()))?;
+        let (maj_s, min_s) = s.split_once('.').ok_or_else(|| {
+            crate::gdtf::Error::InvalidDataVersion { misformatted_string: s.to_owned() }
+        })?;
 
-        let major: u8 =
-            maj_s.parse().map_err(|_| crate::Error::InvalidDataVersion(s.to_owned()))?;
-        let minor: u8 =
-            min_s.parse().map_err(|_| crate::Error::InvalidDataVersion(s.to_owned()))?;
+        let major: u8 = maj_s.parse().map_err(|_| crate::gdtf::Error::InvalidDataVersion {
+            misformatted_string: s.to_owned(),
+        })?;
+        let minor: u8 = min_s.parse().map_err(|_| crate::gdtf::Error::InvalidDataVersion {
+            misformatted_string: s.to_owned(),
+        })?;
 
         Ok(DataVersion { major, minor })
     }
@@ -145,7 +148,7 @@ pub struct Attribute {
     #[serde(default, rename = "@ActivationGroup")]
     pub activation_group: Option<String>,
     #[serde(rename = "@Feature")]
-    pub feature: FeatureType,
+    pub feature: Node,
     #[serde(default, rename = "@MainAttribute")]
     pub main_attribute: Option<Name>,
     #[serde(default, rename = "@PhysicalUnit")]
