@@ -1,4 +1,4 @@
-use std::{fmt, str};
+use std::{fmt, ops, str};
 
 /// A case-sensitive name of a file within the MVR archive, including the extension.
 ///
@@ -65,34 +65,89 @@ impl<'de> serde::Deserialize<'de> for FileName {
 ///
 /// Format: `"{a,b,c}{d,e,f}{g,h,i}{j,k,l}"`.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Matrix4x3 {
-    /// The matrix data as a 2D array.
-    pub data: [[f32; 3]; 4],
+pub struct TransformMatrix {
+    data: [[f32; 3]; 4],
 }
 
-impl Matrix4x3 {
-    /// Returns the matrix as an array.
-    pub fn as_array(&self) -> &[[f32; 3]; 4] {
-        &self.data
-    }
-
+impl TransformMatrix {
     pub fn identity() -> Self {
         Self { data: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]] }
     }
 
-    /// Returns the matrix as a [`Vec<Vec<f32>>`].
-    pub fn to_vec(&self) -> Vec<Vec<f32>> {
-        self.data.iter().map(|row| row.to_vec()).collect()
+    pub fn ux(&self) -> f32 {
+        self.data[0][0]
+    }
+
+    pub fn uy(&self) -> f32 {
+        self.data[0][1]
+    }
+
+    pub fn uz(&self) -> f32 {
+        self.data[0][2]
+    }
+
+    pub fn vx(&self) -> f32 {
+        self.data[1][0]
+    }
+
+    pub fn vy(&self) -> f32 {
+        self.data[1][1]
+    }
+
+    pub fn vz(&self) -> f32 {
+        self.data[1][2]
+    }
+
+    pub fn wx(&self) -> f32 {
+        self.data[2][0]
+    }
+
+    pub fn wy(&self) -> f32 {
+        self.data[2][1]
+    }
+
+    pub fn wz(&self) -> f32 {
+        self.data[2][2]
+    }
+
+    pub fn ox(&self) -> f32 {
+        self.data[3][0]
+    }
+
+    pub fn oy(&self) -> f32 {
+        self.data[3][1]
+    }
+
+    pub fn oz(&self) -> f32 {
+        self.data[3][2]
+    }
+
+    pub fn as_array(&self) -> &[[f32; 3]; 4] {
+        &self.data
     }
 }
 
-impl Default for Matrix4x3 {
+impl Default for TransformMatrix {
     fn default() -> Self {
         Self::identity()
     }
 }
 
-impl fmt::Display for Matrix4x3 {
+impl ops::Deref for TransformMatrix {
+    type Target = [[f32; 3]; 4];
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl ops::DerefMut for TransformMatrix {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
+impl fmt::Display for TransformMatrix {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for row in self.data.iter() {
             write!(f, "{{{},{},{}}}", row[0], row[1], row[2])?;
@@ -101,7 +156,7 @@ impl fmt::Display for Matrix4x3 {
     }
 }
 
-impl str::FromStr for Matrix4x3 {
+impl str::FromStr for TransformMatrix {
     type Err = crate::mvr::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -147,7 +202,7 @@ impl str::FromStr for Matrix4x3 {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for Matrix4x3 {
+impl<'de> serde::Deserialize<'de> for TransformMatrix {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = String::deserialize(deserializer)?;
         s.parse::<Self>().map_err(|e| serde::de::Error::custom(e))

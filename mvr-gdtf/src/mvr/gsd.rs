@@ -4,7 +4,7 @@ use std::ops::{self, Deref, DerefMut};
 use uuid::Uuid;
 
 use crate::CieColor;
-use crate::mvr::{FileName, Matrix4x3};
+use crate::mvr::{FileName, TransformMatrix};
 
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Deserialize)]
@@ -380,7 +380,7 @@ pub struct Fixture {
     #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(default, rename = "GDTFSpec")]
@@ -443,7 +443,7 @@ pub struct FocusPoint {
     #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
@@ -465,7 +465,7 @@ pub struct Geometry3D {
     #[serde(rename = "@fileName")]
     pub file_name: FileName,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -483,7 +483,7 @@ pub struct GroupObject {
     #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "ChildList")]
@@ -498,7 +498,7 @@ pub struct Layer {
     #[serde(default, rename = "@name")]
     pub name: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "ChildList")]
     pub child_list: ChildList,
 }
@@ -663,7 +663,7 @@ pub struct Projector {
     #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
@@ -768,7 +768,7 @@ pub struct SceneObject {
     #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
@@ -846,7 +846,7 @@ pub struct Support {
     #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(default, rename = "Position")]
@@ -897,7 +897,7 @@ pub struct Symbol {
     #[serde(rename = "@symdef")]
     pub symdef: String,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -934,7 +934,7 @@ pub struct Truss {
     #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(default, rename = "Position")]
@@ -994,7 +994,7 @@ pub struct VideoScreen {
     #[serde(default, rename = "@multipatch")]
     pub multipatch: Option<Uuid>,
     #[serde(default, rename = "Matrix")]
-    pub matrix: Option<Matrix4x3>,
+    pub matrix: Option<TransformMatrix>,
     #[serde(default, rename = "Classing")]
     pub classing: Option<Uuid>,
     #[serde(rename = "Geometries")]
