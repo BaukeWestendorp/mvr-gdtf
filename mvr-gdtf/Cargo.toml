@@ -3,13 +3,16 @@ name = "mvr-gdtf"
 version.workspace = true
 edition.workspace = true
 
-[dependencies]
-zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
+[features]
+default = []
+mvr = ["gdtf"]
+gdtf = []
 
+[dependencies]
 quick-xml = { version = "0.39.2", features = ["serialize"] }
 serde = { version = "1.0.228", features = ["derive"] }
-
 uuid = { version = "1.21.0", features = ["serde", "v4"] }
+zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
 
 thiserror = "2.0.18"
 

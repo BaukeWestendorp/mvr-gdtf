@@ -6,10 +6,27 @@ use std::{
 
 use uuid::Uuid;
 
+use crate::CieColor;
 use crate::gdtf::{
     DmxAddress, DmxBreak, DmxOffset, DmxValue, Matrix4x4, Name, Node, PhysicalValue, Vector3,
 };
-use crate::{CieColor, deserialize_option_from_string_none};
+
+fn deserialize_option_from_string_none<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: std::str::FromStr,
+    T::Err: std::fmt::Display,
+{
+    use serde::de::Deserialize as _;
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        None => Ok(None),
+        Some(s) if s == "None" => Ok(None),
+        Some(s) => T::from_str(&s)
+            .map(Some)
+            .map_err(|e| serde::de::Error::custom(format!("Failed to parse: {}", e))),
+    }
+}
 
 /// A data version string formatted as `major.minor` where each is a u8.
 ///

@@ -2,7 +2,9 @@ use std::{fs::File, path::Path};
 
 use zip::ZipArchive;
 
+#[cfg(feature = "gdtf")]
 pub mod gdtf;
+#[cfg(feature = "mvr")]
 pub mod mvr;
 
 mod error;
@@ -11,8 +13,7 @@ mod value;
 pub use error::*;
 pub use value::*;
 
-pub struct Resource {}
-
+#[cfg(any(feature = "mvr", feature = "gdtf"))]
 pub(crate) fn load_zip(path: &Path) -> Result<ZipArchive<File>, crate::Error> {
     let archive = File::open(path)
         .map_err(|e| crate::Error::OpenArchive { source: e, path: path.to_path_buf() })?;
@@ -23,21 +24,4 @@ pub(crate) fn load_zip(path: &Path) -> Result<ZipArchive<File>, crate::Error> {
     Ok(zip)
 }
 
-pub(crate) fn deserialize_option_from_string_none<'de, D, T>(
-    deserializer: D,
-) -> Result<Option<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: std::str::FromStr,
-    T::Err: std::fmt::Display,
-{
-    use serde::de::Deserialize as _;
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    match s {
-        None => Ok(None),
-        Some(s) if s == "None" => Ok(None),
-        Some(s) => T::from_str(&s)
-            .map(Some)
-            .map_err(|e| serde::de::Error::custom(format!("Failed to parse: {}", e))),
-    }
-}
+pub struct Resource {}

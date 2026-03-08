@@ -5,8 +5,10 @@ pub enum Error {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
+    #[cfg(feature = "gdtf")]
     #[error("GDTF error: {0}")]
     Gdtf(#[from] crate::gdtf::Error),
+    #[cfg(feature = "mvr")]
     #[error("MVR error: {0}")]
     Mvr(#[from] crate::mvr::Error),
 
