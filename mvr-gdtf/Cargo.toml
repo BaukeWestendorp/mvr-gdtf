@@ -7,14 +7,23 @@ edition.workspace = true
 default = []
 mvr = ["gdtf"]
 gdtf = []
+xchange = ["mvr", "gdtf", "dep:mdns-sd", "dep:serde_json"]
 
 [dependencies]
 quick-xml = { version = "0.39.2", features = ["serialize"] }
 serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.149", optional = true }
 uuid = { version = "1.21.0", features = ["serde", "v4"] }
 zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
+mdns-sd = { version = "0.11", optional = true }
 
 thiserror = "2.0.18"
+bytes = "1.11.1"
+local-ip-address = "0.6.10"
 
 [lints]
 workspace = true
+
+[[example]]
+name = "xchange_client"
+required-features = ["xchange"]
