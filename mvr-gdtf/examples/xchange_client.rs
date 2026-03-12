@@ -1,14 +1,20 @@
 use uuid::Uuid;
 
 fn main() {
-    let mut client = mvr_gdtf::xchange::Client::new(
+    pretty_env_logger::init();
+
+    let client = mvr_gdtf::xchange::Client::new(
         "Default".to_string(),
         "mvr-gdtf_xchange_client_example".to_string(),
         Uuid::new_v4(),
     )
     .unwrap();
 
-    client.start();
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(3));
 
-    std::thread::sleep(std::time::Duration::from_secs(100000));
+        for (uuid, info) in client.stations() {
+            eprintln!("{uuid}: {info:?}");
+        }
+    }
 }

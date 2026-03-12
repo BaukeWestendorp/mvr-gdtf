@@ -190,7 +190,6 @@ pub enum PacketPayload {
 }
 
 impl PacketPayload {
-    /// Encodes the payload to bytes.
     pub fn encode(&self) -> Vec<u8> {
         match self {
             Self::MvrFile(data) => data.clone(),
@@ -198,7 +197,6 @@ impl PacketPayload {
         }
     }
 
-    /// Decodes bytes into a packet and it's header
     pub fn decode(bytes: &[u8]) -> Option<(PacketHeader, Self)> {
         let header = PacketHeader::decode(bytes)?;
         let payload_start = PacketHeader::LEN;
@@ -219,7 +217,6 @@ impl PacketPayload {
         Some((header, payload))
     }
 
-    /// Determines the package type based on the payload variant.
     pub fn package_type(&self) -> u32 {
         match self {
             Self::MvrFile(_) => 1,
@@ -235,11 +232,6 @@ pub struct Packet {
 }
 
 impl Packet {
-    /// Reads a fully formed packet from the given stream.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `io::Error` if reading from the stream fails or if data is malformed.
     pub fn read<R: Read>(mut reader: R) -> Result<Self, io::Error> {
         let mut header_buf = [0u8; PacketHeader::LEN];
         reader.read_exact(&mut header_buf)?;
@@ -260,11 +252,6 @@ impl Packet {
         Ok(Self { header, payload })
     }
 
-    /// Writes the packet to the given stream.
-    ///
-    /// # Errors
-    ///
-    /// Returns an `io::Error` if writing to the stream fails.
     pub fn write<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
         let payload_bytes = self.payload.encode();
 
@@ -279,22 +266,11 @@ impl Packet {
         Ok(())
     }
 
-    /// Helper to create a complete packet from a payload, automatically setting header fields.
     pub fn from_payload(payload: PacketPayload, package_number: u32, package_count: u32) -> Self {
         let payload_bytes = payload.encode();
         let header = PacketHeader::new(payload_bytes.len() as u64, package_number, package_count);
         let mut header = header;
         header.package_type = payload.package_type();
         Self { header, payload }
-    }
-
-    /// Helper to create a packet for a file transfer (MvrFile variant).
-    pub fn mvr_file(data: Vec<u8>, package_number: u32, package_count: u32) -> Self {
-        Self::from_payload(PacketPayload::MvrFile(data), package_number, package_count)
-    }
-
-    /// Helper to create a packet for a JSON payload variant.
-    pub fn json_payload(payload: PacketPayload, package_number: u32, package_count: u32) -> Self {
-        Self::from_payload(payload, package_number, package_count)
     }
 }

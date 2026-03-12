@@ -1,238 +1,209 @@
-use std::{
-    io::{Read as _, Write},
-    net::TcpStream,
-    thread::{self},
-};
+// use std::{
+//     collections::HashMap,
+//     net::{IpAddr, Shutdown, SocketAddr, TcpStream},
+//     sync::{Arc, Mutex},
+//     thread,
+//     time::Duration,
+// };
 
-use mdns_sd::{ServiceEvent, ServiceInfo};
-use uuid::Uuid;
+// use flume::{Receiver, Sender};
+// use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+// use uuid::Uuid;
 
-use crate::xchange::packet::{Packet, PacketHeader, PacketPayload};
+// use crate::xchange::packet::Packet;
 
-const SERVICE_TYPE: &str = "_mvrxchange._tcp.local.";
+// const SERVICE_TYPE: &str = "_mvrxchange._tcp.local.";
 
-pub struct Client {
-    group_name: String,
-    station_name: String,
-    station_uuid: Uuid,
-}
+// pub enum Command {
+//     RegisterStation { name: String, uuid: Uuid, stream: TcpStream },
+//     RemoveStation { uuid: Uuid },
+// }
 
-impl Client {
-    pub fn new(
-        group_name: String,
-        station_name: String,
-        station_uuid: Uuid,
-    ) -> Result<Self, crate::xchange::Error> {
-        Ok(Self { group_name, station_name, station_uuid })
-    }
+// pub struct Client {
+//     group_name: String,
+//     station_name: String,
+//     station_uuid: Uuid,
 
-    pub fn start(&mut self) {
-        let inner = Inner {
-            group_name: self.group_name.clone(),
-            station_name: self.station_name.clone(),
-            station_uuid: self.station_uuid.clone(),
-        };
+//     station_infos: Arc<Mutex<HashMap<Uuid, StationInfo>>>,
+//     station_streams: Arc<Mutex<HashMap<Uuid, TcpStream>>>,
+// }
 
-        thread::spawn(move || {
-            if let Err(err) = inner.run() {
-                eprintln!("Client thread error: {:?}", err);
-            }
-        });
-    }
+// impl Client {
+//     pub fn new(
+//         group_name: String,
+//         station_name: String,
+//         station_uuid: Uuid,
+//     ) -> Result<Self, crate::xchange::Error> {
+//         let (cmd_tx, cmd_rx) = flume::unbounded();
 
-    // Add other send functions here.
-    pub fn send_join() -> () {}
-}
+//         let client = Self {
+//             group_name,
+//             station_name,
+//             station_uuid,
+//             station_infos: Arc::new(Mutex::new(HashMap::new())),
+//             station_streams: Arc::new(Mutex::new(HashMap::new())),
+//         };
 
-struct Inner {
-    group_name: String,
-    station_name: String,
-    station_uuid: Uuid,
-}
+//         client.start_manager(cmd_rx, cmd_tx.clone());
+//         client.start_discovery(cmd_tx);
 
-impl Inner {
-    fn run(self) -> Result<(), crate::xchange::Error> {
-        // Start a mDNS service.
+//         Ok(client)
+//     }
 
-        let mdns = mdns_sd::ServiceDaemon::new().unwrap();
+//     pub fn stations(&self) -> HashMap<Uuid, StationInfo> {
+//         self.station_infos.lock().unwrap().clone()
+//     }
 
-        let host_name = format!("{}.{}", self.group_name, SERVICE_TYPE);
-        let properties = [
-            ("StationName", self.station_name.clone()),
-            ("StationUUID", self.station_uuid.to_string()),
-        ];
+//     fn start_manager(&self, cmd_rx: Receiver<Command>, cmd_tx: Sender<Command>) {
+//         thread::spawn({
+//             let station_infos = Arc::clone(&self.station_infos);
+//             let station_streams = Arc::clone(&self.station_streams);
+//             move || {
+//                 while let Ok(cmd) = cmd_rx.recv() {
+//                     match cmd {
+//                         Command::RegisterStation { name, uuid, stream } => {
+//                             log::trace!("Registering station: uuid = {}", uuid);
 
-        let service = mdns_sd::ServiceInfo::new(
-            SERVICE_TYPE,
-            &self.group_name,
-            &host_name,
-            local_ip_address::local_ip().unwrap(),
-            4457,
-            &properties[..],
-        )
-        .unwrap();
+//                             station_infos.lock().unwrap().insert(
+//                                 uuid,
+//                                 StationInfo { name, addr: stream.peer_addr().unwrap() },
+//                             );
 
-        mdns.register(service).unwrap();
+//                             thread::spawn({
+//                                 let cmd_tx = cmd_tx.clone();
+//                                 let stream = stream.try_clone().expect("Failed to clone stream");
+//                                 move || {
+//                                     loop {
+//                                         match Packet::read(&stream) {
+//                                             Ok(packet) => log::debug!("{:?}", packet),
+//                                             Err(_) => break,
+//                                         }
+//                                     }
+//                                     let _ = cmd_tx.send(Command::RemoveStation { uuid });
+//                                 }
+//                             });
 
-        // Browse for all with group_name (except ourselves).
+//                             station_streams.lock().unwrap().insert(uuid, stream);
+//                         }
+//                         Command::RemoveStation { uuid } => {
+//                             log::trace!("Removing station: uuid = {}", uuid);
 
-        let browser = mdns.browse(SERVICE_TYPE).unwrap();
-        loop {
-            match browser.recv() {
-                Ok(event) => match event {
-                    ServiceEvent::ServiceResolved(service) => {
-                        self.handle_service(service)?;
-                    }
-                    _ => {}
-                },
-                Err(err) => todo!("{err}"),
-            }
-        }
-    }
+//                             station_infos.lock().unwrap().remove(&uuid);
+//                             if let Some(stream) = station_streams.lock().unwrap().remove(&uuid) {
+//                                 let _ = stream.shutdown(Shutdown::Both);
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         });
+//     }
 
-    fn handle_service(&self, service: ServiceInfo) -> Result<(), crate::xchange::Error> {
-        let fullname = service.get_fullname();
-        let service_group_name = fullname
-            .strip_suffix(SERVICE_TYPE)
-            .unwrap_or(fullname)
-            .trim_end_matches('.')
-            .to_string();
+//     fn start_discovery(&self, cmd_tx: Sender<Command>) {
+//         let group_name = self.group_name.clone();
+//         let station_name = self.station_name.clone();
+//         let station_uuid = self.station_uuid;
 
-        if self.group_name != service_group_name {
-            return Ok(());
-        }
+//         thread::spawn(move || {
+//             let mdns = ServiceDaemon::new().expect("Failed to create mDNS daemon");
 
-        let port = service.get_port();
+//             thread::spawn({
+//                 let mdns = mdns.clone();
+//                 let group_name = group_name.clone();
+//                 let station_name = station_name.clone();
+//                 move || {
+//                     let host_name = format!("{}.{}", group_name, SERVICE_TYPE);
+//                     let properties = HashMap::from([
+//                         ("StationName".to_string(), station_name),
+//                         ("StationUUID".to_string(), station_uuid.to_string()),
+//                     ]);
 
-        let mut properties = std::collections::HashMap::new();
-        for prop in service.get_properties().iter() {
-            properties.insert(prop.key().to_string(), prop.val_str().to_string());
-        }
+//                     loop {
+//                         let new_service = ServiceInfo::new(
+//                             SERVICE_TYPE,
+//                             &group_name,
+//                             &host_name,
+//                             local_ip_address::local_ip().unwrap().to_string(),
+//                             5353,
+//                             properties.clone(),
+//                         )
+//                         .expect("Failed to create service info");
 
-        for ip in service.get_addresses().iter().copied() {
-            let station_addr = std::net::SocketAddr::new(std::net::IpAddr::from(ip), port);
+//                         mdns.register(new_service).ok();
+//                         thread::sleep(Duration::from_secs(10));
+//                     }
+//                 }
+//             });
 
-            let station_uuid = match properties.get("StationUUID") {
-                Some(uuid_str) => match Uuid::parse_str(uuid_str) {
-                    Ok(uuid) => uuid,
-                    Err(_) => {
-                        eprintln!("Discovered station with invalid UUID: {}", uuid_str);
-                        continue;
-                    }
-                },
-                None => {
-                    eprintln!("Discovered station missing UUID");
-                    continue;
-                }
-            };
+//             let browser = mdns.browse(SERVICE_TYPE).expect("Failed to browse mDNS");
+//             while let Ok(event) = browser.recv() {
+//                 if let ServiceEvent::ServiceResolved(info) = event {
+//                     handle_discovered_service(&group_name, station_uuid, info, &cmd_tx);
+//                 }
+//             }
+//         });
+//     }
+// }
 
-            // Skip ourselves
-            if station_uuid == self.station_uuid {
-                continue;
-            }
+// fn handle_discovered_service(
+//     group_name: &str,
+//     local_uuid: Uuid,
+//     service: ServiceInfo,
+//     cmd_tx: &Sender<Command>,
+// ) {
+//     let fullname = service.get_fullname();
+//     let service_group_name =
+//         fullname.strip_suffix(SERVICE_TYPE).unwrap_or(fullname).trim_end_matches('.').to_string();
 
-            let mut socket = TcpStream::connect(station_addr)?;
-            socket.set_nodelay(true)?;
+//     if group_name != service_group_name {
+//         return;
+//     }
 
-            self.send_join(&mut socket)?;
+//     let properties: HashMap<String, String> = service
+//         .get_properties()
+//         .iter()
+//         .map(|p| (p.key().to_string(), p.val_str().to_string()))
+//         .collect();
 
-            loop {
-                let packet = Packet::read(&mut socket).unwrap();
-                dbg!(packet);
-            }
-        }
+//     let remote_uuid = match properties.get("StationUUID").and_then(|s| Uuid::parse_str(s).ok()) {
+//         Some(uuid) => uuid,
+//         None => return,
+//     };
 
-        Ok(())
-    }
+//     let remote_name = match properties.get("StationName") {
+//         Some(name) => name,
+//         None => return,
+//     };
 
-    pub fn send_join(&self, socket: &mut TcpStream) -> Result<(), crate::xchange::Error> {
-        let packet = Packet::from_payload(
-            PacketPayload::MvrJoin {
-                provider: "Provider Name".to_string(),
-                station_name: self.station_name.clone(),
-                ver_major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
-                ver_minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
-                station_uuid: self.station_uuid,
-                commits: Vec::new(),
-            },
-            0,
-            1,
-        );
+//     if remote_uuid == local_uuid {
+//         return;
+//     }
 
-        packet.write(socket)?;
+//     let port = service.get_port();
+//     for ip in service.get_addresses() {
+//         let remote_addr = SocketAddr::new(IpAddr::from(*ip), port);
+//         if let Ok(stream) = TcpStream::connect_timeout(&remote_addr, Duration::from_millis(500)) {
+//             let _ = cmd_tx.send(Command::RegisterStation {
+//                 name: remote_name.clone(),
+//                 uuid: remote_uuid,
+//                 stream,
+//             });
+//         }
+//     }
+// }
 
-        Ok(())
-    }
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct StationInfo {
+//     name: String,
+//     addr: SocketAddr,
+// }
 
-    pub fn send_leave(&self, socket: &mut TcpStream) -> Result<(), crate::xchange::Error> {
-        let packet = Packet::from_payload(
-            PacketPayload::MvrLeave { from_station_uuid: self.station_uuid },
-            0,
-            1,
-        );
-        packet.write(socket)?;
-        Ok(())
-    }
+// impl StationInfo {
+//     pub fn name(&self) -> &str {
+//         &self.name
+//     }
 
-    pub fn send_commit(
-        &self,
-        socket: &mut TcpStream,
-        args: crate::xchange::packet::MvrCommitArgs,
-    ) -> Result<(), crate::xchange::Error> {
-        let packet = Packet::from_payload(
-            PacketPayload::MvrCommit {
-                file_uuid: args.file_uuid,
-                station_uuid: args.station_uuid,
-                file_size: args.file_size,
-                ver_major: args.ver_major,
-                ver_minor: args.ver_minor,
-                for_stations_uuid: args.for_stations_uuid,
-                file_name: args.file_name,
-                comment: args.comment,
-            },
-            0,
-            1,
-        );
-        packet.write(socket)?;
-        Ok(())
-    }
-
-    pub fn send_request(
-        &self,
-        socket: &mut TcpStream,
-        file_uuid: Option<Uuid>,
-        from_station_uuid: Vec<Uuid>,
-    ) -> Result<(), crate::xchange::Error> {
-        let packet =
-            Packet::from_payload(PacketPayload::MvrRequest { file_uuid, from_station_uuid }, 0, 1);
-        packet.write(socket)?;
-        Ok(())
-    }
-
-    pub fn send_new_session_host(
-        &self,
-        socket: &mut TcpStream,
-        service_name: Option<String>,
-        service_url: Option<String>,
-    ) -> Result<(), crate::xchange::Error> {
-        let packet = Packet::from_payload(
-            PacketPayload::MvrNewSessionHost { service_name, service_url },
-            0,
-            1,
-        );
-        packet.write(socket)?;
-        Ok(())
-    }
-
-    pub fn send_file(
-        &self,
-        socket: &mut TcpStream,
-        data: Vec<u8>,
-        package_number: u32,
-        package_count: u32,
-    ) -> Result<(), crate::xchange::Error> {
-        let packet = Packet::mvr_file(data, package_number, package_count);
-        packet.write(socket)?;
-        Ok(())
-    }
-}
+//     pub fn addr(&self) -> SocketAddr {
+//         self.addr
+//     }
+// }
