@@ -14,7 +14,7 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_secs(3));
 
         for (uuid, info) in client.stations() {
-            eprintln!("{uuid}: {info:?}");
+            eprintln!("{uuid}: {info:#?}");
         }
     }
 }
