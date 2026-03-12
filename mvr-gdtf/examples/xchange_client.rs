@@ -1,20 +1,22 @@
-use uuid::Uuid;
+use std::{thread, time::Duration};
+
+use mvr_gdtf::xchange::Settings;
 
 fn main() {
     pretty_env_logger::init();
 
-    let client = mvr_gdtf::xchange::Client::new(
-        "Default".to_string(),
-        "mvr-gdtf_xchange_client_example".to_string(),
-        Uuid::new_v4(),
-    )
-    .unwrap();
+    let client = mvr_gdtf::xchange::Client::new(Settings {
+        station_name: "mvr-gdtf Client Example".to_string(),
+        ..Default::default()
+    })
+    .expect("should create mvr-xchange client");
 
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(3));
-
-        for (uuid, info) in client.stations() {
-            eprintln!("{uuid}: {info:#?}");
+        for (_uuid, info) in client.stations() {
+            eprintln!("{info:?}");
         }
+        eprintln!("------------------");
+
+        thread::sleep(Duration::from_secs_f32(0.5));
     }
 }
