@@ -232,15 +232,15 @@ impl Client {
 //         loop {
 //             log::trace!("Registering mDNS service...");
 
-//             let service = ServiceInfo::new(
-//                 SERVICE_TYPE,
-//                 &settings.group_name,
-//                 &host_name,
-//                 settings.interface_ip,
-//                 settings.port,
-//                 properties.clone(),
-//             )
-//             .expect("ServiceInfo");
+// let service = ServiceInfo::new(
+//     SERVICE_TYPE,
+//     &settings.group_name,
+//     &host_name,
+//     settings.interface_ip,
+//     settings.port,
+//     properties.clone(),
+// )
+// .expect("ServiceInfo");
 
 //             let _ = mdns.register(service);
 //             thread::sleep(REREGISTER_INTERVAL);
@@ -341,9 +341,9 @@ impl Client {
 //                 })
 //                 .ok();
 //         }
-//         PacketPayload::JoinRet { ok: false, message, station_name, station_uuid, .. } => {
-//             log::warn!("Station {station_name} ({station_uuid}) rejected join: {message}");
-//         }
+// PacketPayload::JoinRet { ok: false, message, station_name, station_uuid, .. } => {
+//     log::warn!("Station {station_name} ({station_uuid}) rejected join: {message}");
+// }
 //         payload => {
 //             log::warn!("Unexpected packet payload: {payload:?}");
 //         }

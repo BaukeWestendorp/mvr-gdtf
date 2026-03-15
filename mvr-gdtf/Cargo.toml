@@ -7,7 +7,7 @@ edition.workspace = true
 default = []
 mvr = ["gdtf"]
 gdtf = []
-xchange = ["mvr", "gdtf", "dep:flume", "dep:local-ip-address", "dep:mdns-sd", "dep:serde_json"]
+xchange = ["mvr", "gdtf", "dep:local-ip-address", "dep:serde_json", "dep:mdns-sd"]
 
 [dependencies]
 log = "0.4.29"
@@ -20,16 +20,15 @@ uuid = { version = "1.21.0", features = ["serde", "v4"] }
 zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
 
 # feature = "xchange"
-flume = { version = "0.12.0", optional = true }
 local-ip-address = { version = "0.6.10", optional = true }
-mdns-sd = { version = "0.11", optional = true }
+mdns-sd = { version = "0.18.2", optional = true }
 serde_json = { version = "1.0.149", optional = true }
 
 [lints]
 workspace = true
 
 [[example]]
-name = "xchange_client"
+name = "xchange_service"
 required-features = ["xchange"]
 
 [dev-dependencies]

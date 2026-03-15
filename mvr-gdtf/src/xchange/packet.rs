@@ -2,7 +2,7 @@ use std::io;
 
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct PacketHeader {
     pub magic: u32,
@@ -54,7 +54,7 @@ impl PacketHeader {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Commit {
     #[serde(rename = "FileUUID")]
@@ -75,7 +75,7 @@ pub struct Commit {
     pub comment: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(tag = "Type")]
 pub enum PacketPayload {
@@ -236,7 +236,6 @@ impl Packet {
     pub fn write<W: io::Write>(&self, mut writer: W) -> Result<(), crate::xchange::Error> {
         let payload_bytes = self.payload.serialize_payload()?;
 
-        // Ensure header matches actual payload state before writing
         let mut header = self.header.clone();
         header.payload_length = payload_bytes.len() as u64;
         header.r#type = self.payload.r#type();
