@@ -115,7 +115,8 @@ pub enum PacketPayload {
     },
     #[serde(rename = "MVR_LEAVE")]
     Leave {
-        #[serde(rename = "FromStationUUID")]
+        // NOTE: This alias is cringe, I know. GrandMA3 sends the MVR_LEAVE packet with this field name instead...
+        #[serde(rename = "FromStationUUID", alias = "StationUUID")]
         from_station_uuid: Uuid,
     },
     #[serde(rename = "MVR_LEAVE_RET")]

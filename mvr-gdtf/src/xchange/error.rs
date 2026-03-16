@@ -11,17 +11,8 @@ pub enum Error {
     PacketSerialization(#[from] serde_json::Error),
     #[error("Invalid header magic or length")]
     InvalidPacketHeader,
-
-    #[error("Sender channel closed")]
-    ChannelClosed,
-
-    #[error("Station UUID is invalid")]
-    StationUuidInvalid,
-    #[error("Station UUID is missing")]
-    StationUuidMissing,
-    #[error("Station name is missing")]
-    StationNameMissing,
-
-    #[error("Station not found")]
-    StationNotFound,
+    #[error("Received an unexpected packet")]
+    UnexpectedPacket,
+    #[error("Invalid packet: {message}")]
+    InvalidPacket { message: String },
 }

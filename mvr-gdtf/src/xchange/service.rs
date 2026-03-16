@@ -1,13 +1,13 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io,
     net::{IpAddr, SocketAddr, TcpListener, TcpStream},
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex},
     thread,
     time::Duration,
 };
 
-use mdns_sd::{ResolvedService, ServiceEvent, ServiceInfo};
+use mdns_sd::{ServiceEvent, ServiceInfo};
 use uuid::Uuid;
 
 use crate::xchange::packet::{Commit, Packet, PacketPayload};
@@ -41,18 +41,18 @@ impl Default for Settings {
             ver_minor: env!("CARGO_PKG_VERSION_MINOR").parse().expect("should parse minor version"),
 
             interface_ip: local_ip_address::local_ip().expect("should get local ip address"),
-            port: 5568,
+            port: 48484,
         }
     }
 }
 
 pub struct Service {
+    settings: Settings,
     inner: Arc<Inner>,
 }
 
 impl Service {
     pub fn new(mut settings: Settings) -> Result<Self, crate::xchange::Error> {
-        // mDNS names must not contain spaces, slashes, or certain punctuation.
         let lossy_station_name: String = settings
             .station_name
             .chars()
@@ -60,175 +60,163 @@ impl Service {
             .collect();
         settings.station_name = lossy_station_name;
 
-        let mdns = mdns_sd::ServiceDaemon::new()?;
+        let inner = Arc::new(Inner::new(settings.clone())?);
 
-        thread::spawn({
-            let mdns = mdns.clone();
-            let settings = settings.clone();
-            move || {
-                loop {
-                    let service = match ServiceInfo::new(
-                        SERVICE_TYPE,
-                        &settings.group_name,
-                        &format!("{}.local.", settings.station_name),
-                        &settings.interface_ip.to_string(),
-                        settings.port,
-                        HashMap::from([
-                            ("StationName".to_string(), settings.station_name.to_string()),
-                            ("StationUUID".to_string(), settings.station_uuid.to_string()),
-                        ]),
-                    ) {
-                        Ok(service) => service,
-                        Err(err) => {
-                            log::error!("Failed to create mDNS service: {err}");
-                            continue;
-                        }
-                    };
-
-                    if let Err(err) = mdns.register(service) {
-                        log::error!("Failed to register mDNS service: {err}");
-                    }
-
-                    thread::sleep(REGISTRATION_INTERVAL);
-                }
-            }
-        });
-
-        let browser = mdns.browse(SERVICE_TYPE)?;
-
-        let inner = Arc::new(Inner::new(settings)?);
-
-        thread::spawn({
-            let inner = Arc::clone(&inner);
-            move || {
-                loop {
-                    match browser.recv() {
-                        Ok(ServiceEvent::ServiceResolved(service)) => {
-                            if let Err(e) = inner.update_stations_for_service(&service) {
-                                log::error!("Failed to update stations: {:?}", e);
-                            }
-                        }
-                        Err(_) => break,
-                        _ => {}
-                    }
-                }
-            }
-        });
-
-        Ok(Self { inner })
+        Ok(Self { settings, inner })
     }
 
-    pub fn stations(&self) -> Vec<StationInfo> {
-        self.inner
-            .connections
-            .read()
-            .unwrap()
-            .values()
-            .filter_map(|conn| conn.station_info.clone())
-            .collect()
+    pub fn start(&self) -> Result<(), crate::xchange::Error> {
+        self.start_listener()?;
+        self.start_mdns_registration()?;
+        self.start_mdns_browser_and_join()?;
+        Ok(())
+    }
+
+    fn start_listener(&self) -> Result<(), io::Error> {
+        let listener = TcpListener::bind((self.settings.interface_ip, self.settings.port))?;
+
+        thread::spawn({
+            let inner = Arc::clone(&self.inner);
+            move || {
+                for stream in listener.incoming() {
+                    match stream {
+                        Ok(stream) => {
+                            let inner = Arc::clone(&inner);
+                            thread::spawn(move || {
+                                if let Err(err) = inner.handle_connection(stream) {
+                                    log::error!("failed to handle connection: {}", err);
+                                }
+                            });
+                        }
+                        Err(err) => {
+                            log::error!("failed to accept connection: {}", err);
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    fn start_mdns_registration(&self) -> Result<(), crate::xchange::Error> {
+        let mdns = mdns_sd::ServiceDaemon::new()?;
+        let inner = Arc::clone(&self.inner);
+
+        thread::spawn(move || {
+            loop {
+                let settings = &inner.settings;
+                let service = match ServiceInfo::new(
+                    SERVICE_TYPE,
+                    &settings.group_name,
+                    &format!("{}.local.", settings.station_name),
+                    &settings.interface_ip.to_string(),
+                    settings.port,
+                    HashMap::from([
+                        ("StationName".to_string(), settings.station_name.to_string()),
+                        ("StationUUID".to_string(), settings.station_uuid.to_string()),
+                    ]),
+                ) {
+                    Ok(service) => service,
+                    Err(err) => {
+                        log::error!("failed to create mDNS service: {err}");
+                        thread::sleep(REGISTRATION_INTERVAL);
+                        continue;
+                    }
+                };
+
+                if let Err(err) = mdns.register(service) {
+                    log::error!("failed to register mDNS service: {err}");
+                }
+
+                thread::sleep(REGISTRATION_INTERVAL);
+            }
+        });
+
+        Ok(())
+    }
+
+    fn start_mdns_browser_and_join(&self) -> Result<(), crate::xchange::Error> {
+        let mdns = mdns_sd::ServiceDaemon::new()?;
+        let browser = mdns.browse(SERVICE_TYPE)?;
+        let inner = Arc::clone(&self.inner);
+        let settings = self.settings.clone();
+
+        thread::spawn(move || {
+            while let Ok(event) = browser.recv() {
+                match event {
+                    ServiceEvent::ServiceResolved(resolved_service) => {
+                        let uuid_str = resolved_service.get_property_val_str("StationUUID");
+                        let Some(uuid) = uuid_str.and_then(|s| Uuid::parse_str(s).ok()) else {
+                            continue;
+                        };
+
+                        if uuid == settings.station_uuid {
+                            // We don't need ourselves.
+                            continue;
+                        }
+
+                        for addr in resolved_service.get_addresses() {
+                            let socket_addr =
+                                SocketAddr::from((addr.to_ip_addr(), resolved_service.get_port()));
+
+                            if inner.station_is_registered(&uuid) {
+                                continue;
+                            }
+
+                            if let Err(err) = inner.send_join(socket_addr) {
+                                log::warn!("failed to send MVR_JOIN to {socket_addr}: {err}");
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    pub fn stations_in_group(&self) -> Vec<StationInfo> {
+        let joined_uuids = self.inner.joined_stations.lock().unwrap();
+        let stations = self.inner.stations.lock().unwrap();
+        joined_uuids.iter().filter_map(|uuid| stations.get(uuid).cloned()).collect()
     }
 }
 
 struct Inner {
     settings: Settings,
-
-    connections: RwLock<HashMap<SocketAddr, Connection>>,
+    stations: Mutex<HashMap<Uuid, StationInfo>>,
+    joined_stations: Mutex<HashSet<Uuid>>,
 }
 
 impl Inner {
     pub fn new(settings: Settings) -> Result<Self, io::Error> {
-        let listener = TcpListener::bind((settings.interface_ip, settings.port))?;
-
-        thread::spawn(move || {
-            for connection in listener.incoming() {
-                let stream = connection.unwrap();
-                while let Ok(packet) = Packet::read(&stream) {
-                    println!("listener_packet: {packet:?}");
-                }
-            }
-        });
-
-        Ok(Self { settings, connections: RwLock::new(HashMap::new()) })
+        Ok(Self {
+            settings,
+            stations: Mutex::new(HashMap::new()),
+            joined_stations: Mutex::new(HashSet::new()),
+        })
     }
 
-    pub fn update_stations_for_service(
-        &self,
-        service: &ResolvedService,
-    ) -> Result<(), crate::xchange::Error> {
-        let port = service.get_port();
-        let addresses = service
-            .get_addresses()
-            .iter()
-            .map(|ip| SocketAddr::from((ip.to_ip_addr(), port)))
-            .collect::<Vec<_>>();
-        for addr in &addresses {
-            // Do not add ourselves.
-            if (addr.ip(), port) == (self.settings.interface_ip, self.settings.port) {
-                continue;
-            }
-
-            let mut connection = self.take_or_create_connection(*addr)?;
-            if connection.join(&self.settings).is_ok() {
-                self.connections.write().unwrap().insert(*addr, connection);
-            }
-        }
-
-        self.connections.write().unwrap().retain(|addr, _| addresses.contains(&addr));
-
-        Ok(())
-    }
-
-    fn take_or_create_connection(&self, socket_addr: SocketAddr) -> Result<Connection, io::Error> {
-        match self.connections.write().unwrap().remove(&socket_addr) {
-            Some(conn) => Ok(conn),
-            None => Ok(Connection::new(TcpStream::connect(socket_addr)?)?),
-        }
-    }
-}
-
-struct Connection {
-    stream: TcpStream,
-    station_info: Option<StationInfo>,
-}
-
-impl Connection {
-    pub fn new(stream: TcpStream) -> Result<Self, io::Error> {
-        thread::spawn({
-            let stream = stream.try_clone()?;
-            move || {
-                while let Ok(packet) = Packet::read(&stream) {
-                    println!("conn_packet: {packet:?}");
-                }
-            }
-        });
-
-        Ok(Self { stream, station_info: None })
-    }
-
-    pub fn update_station_info(&mut self, station_info: StationInfo) {
-        self.station_info = Some(station_info);
-    }
-}
-
-impl Connection {
-    pub fn join(&mut self, settings: &Settings) -> Result<(), crate::xchange::Error> {
-        let join_packet = Packet::new(
+    fn send_join(&self, socket_addr: SocketAddr) -> Result<(), crate::xchange::Error> {
+        let stream = TcpStream::connect_timeout(&socket_addr, Duration::from_millis(800))?;
+        let join = Packet::new(
             PacketPayload::Join {
-                provider: settings.provider_name.to_owned(),
-                station_name: settings.station_name.to_owned(),
-                station_uuid: settings.station_uuid,
-                ver_major: settings.ver_major,
-                ver_minor: settings.ver_minor,
+                provider: self.settings.provider_name.to_owned(),
+                station_name: self.settings.station_name.to_owned(),
+                station_uuid: self.settings.station_uuid,
+                ver_major: self.settings.ver_major,
+                ver_minor: self.settings.ver_minor,
                 commits: Vec::new(),
             },
             0,
             1,
         )?;
+        join.write(&stream)?;
 
-        join_packet.write(&self.stream)?;
-
-        match Packet::read(&self.stream) {
-            Ok(Packet { payload, .. }) => match payload {
+        match Packet::read(&stream) {
+            Ok(packet) => match packet.payload {
                 PacketPayload::JoinRet {
                     ok: true,
                     provider,
@@ -239,33 +227,128 @@ impl Connection {
                     commits,
                     ..
                 } => {
-                    log::debug!(
-                        "Station '{station_name}' ({station_uuid}) joined successfully: provider={provider}, version={ver_major}.{ver_minor}",
-                    );
-
-                    self.update_station_info(StationInfo {
+                    self.join_station(StationInfo {
                         uuid: station_uuid,
                         name: station_name,
-                        addr: self.stream.peer_addr()?,
+                        address: stream.peer_addr()?,
                         provider,
                         ver_major,
                         ver_minor,
                         commits,
                     });
+
+                    Ok(())
                 }
-                PacketPayload::JoinRet {
-                    ok: false, message, station_name, station_uuid, ..
-                } => {
-                    log::warn!("Station '{station_name} ({station_uuid}) rejected join: {message}");
+                PacketPayload::JoinRet { ok: false, message, .. } => {
+                    Err(crate::xchange::Error::InvalidPacket { message })
                 }
-                payload => {
-                    log::warn!("Unexpected payload: {:?}", payload);
-                }
+                _ => Err(crate::xchange::Error::UnexpectedPacket),
             },
-            Err(err) => return Err(err),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn handle_connection(&self, stream: TcpStream) -> Result<(), crate::xchange::Error> {
+        let packet = Packet::read(&stream)?;
+
+        match packet.payload {
+            PacketPayload::Join {
+                provider,
+                station_name,
+                station_uuid,
+                ver_major,
+                ver_minor,
+                commits,
+            } => {
+                self.join_station(StationInfo {
+                    uuid: station_uuid,
+                    name: station_name,
+                    address: stream.peer_addr()?,
+                    provider,
+                    ver_major,
+                    ver_minor,
+                    commits,
+                });
+
+                let join_ret = Packet::new(
+                    PacketPayload::JoinRet {
+                        ok: true,
+                        message: String::new(),
+                        provider: self.settings.provider_name.to_owned(),
+                        station_name: self.settings.station_name.to_owned(),
+                        station_uuid: self.settings.station_uuid,
+                        ver_major: self.settings.ver_major,
+                        ver_minor: self.settings.ver_minor,
+                        commits: Vec::new(),
+                    },
+                    0,
+                    1,
+                )?;
+                join_ret.write(&stream)?;
+            }
+            PacketPayload::Leave { from_station_uuid } => {
+                self.leave_station(&from_station_uuid);
+
+                let leave_ret = Packet::new(
+                    PacketPayload::LeaveRet { ok: true, message: String::new() },
+                    0,
+                    1,
+                )?;
+                leave_ret.write(&stream)?;
+            }
+            PacketPayload::Commit {
+                file_uuid,
+                station_uuid,
+                file_size,
+                ver_major,
+                ver_minor,
+                for_stations_uuid,
+                file_name,
+                comment,
+            } => {
+                if let Some(station) = self.stations.lock().unwrap().get_mut(&station_uuid) {
+                    station.commits.push(Commit {
+                        file_uuid,
+                        station_uuid,
+                        file_size,
+                        ver_major,
+                        ver_minor,
+                        for_stations_uuid,
+                        file_name,
+                        comment,
+                    });
+                }
+
+                let commit_ret = Packet::new(
+                    PacketPayload::CommitRet { ok: true, message: String::new() },
+                    0,
+                    1,
+                )?;
+                commit_ret.write(&stream)?;
+            }
+            PacketPayload::Request { file_uuid: _, from_station_uuid: _ } => {
+                todo!("handle MVR_REQUEST");
+            }
+            PacketPayload::NewSessionHost { .. } => {
+                todo!("handle MVR_NEW_SESSION_HOST");
+            }
+            _ => return Err(crate::xchange::Error::UnexpectedPacket),
         }
 
         Ok(())
+    }
+
+    fn station_is_registered(&self, station_uuid: &Uuid) -> bool {
+        self.stations.lock().unwrap().contains_key(station_uuid)
+    }
+
+    fn join_station(&self, info: StationInfo) {
+        self.joined_stations.lock().unwrap().insert(info.uuid);
+        self.stations.lock().unwrap().insert(info.uuid, info);
+    }
+
+    fn leave_station(&self, uuid: &Uuid) {
+        self.joined_stations.lock().unwrap().remove(uuid);
     }
 }
 
@@ -273,7 +356,7 @@ impl Connection {
 pub struct StationInfo {
     uuid: Uuid,
     name: String,
-    addr: SocketAddr,
+    address: SocketAddr,
     provider: String,
     ver_major: u32,
     ver_minor: u32,
@@ -285,12 +368,12 @@ impl StationInfo {
         &self.name
     }
 
-    pub fn addr(&self) -> SocketAddr {
-        self.addr
-    }
-
     pub fn provider(&self) -> &str {
         &self.provider
+    }
+
+    pub fn address(&self) -> SocketAddr {
+        self.address
     }
 
     pub fn ver_major(&self) -> u32 {
