@@ -2,8 +2,11 @@ use std::{
     collections::{HashMap, HashSet},
     io,
     net::{IpAddr, SocketAddr, TcpListener, TcpStream},
-    sync::{Arc, Mutex},
-    thread,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread::{self, JoinHandle},
     time::{Duration, Instant},
 };
 
@@ -50,6 +53,8 @@ impl Default for Settings {
 pub struct Service {
     settings: Settings,
     inner: Arc<Inner>,
+    shutdown: Arc<AtomicBool>,
+    handles: Mutex<Vec<JoinHandle<()>>>,
 }
 
 impl Service {
@@ -63,37 +68,76 @@ impl Service {
 
         let inner = Arc::new(Inner::new(settings.clone())?);
 
-        Ok(Self { settings, inner })
+        let this = Self {
+            settings,
+            inner,
+            shutdown: Arc::new(AtomicBool::new(false)),
+            handles: Mutex::new(Vec::new()),
+        };
+
+        this.start_listener()?;
+        this.start_mdns_registration()?;
+        this.start_mdns_browser_and_join()?;
+        this.start_purger();
+
+        Ok(this)
     }
 
-    pub fn start(&self) -> Result<(), crate::xchange::Error> {
-        self.start_listener()?;
-        self.start_mdns_registration()?;
-        self.start_mdns_browser_and_join()?;
-        self.inner.start_purger();
+    fn start_purger(&self) {
+        let inner = Arc::clone(&self.inner);
+        let shutdown = Arc::clone(&self.shutdown);
 
-        Ok(())
+        let handle = thread::spawn(move || {
+            while !shutdown.load(Ordering::Relaxed) {
+                let mut slept = Duration::ZERO;
+                while slept < Duration::from_secs(5) && !shutdown.load(Ordering::Relaxed) {
+                    let step = Duration::from_millis(200);
+                    thread::sleep(step);
+                    slept += step;
+                }
+                if shutdown.load(Ordering::Relaxed) {
+                    break;
+                }
+                inner.purge_once();
+            }
+        });
+
+        self.handles.lock().unwrap().push(handle);
     }
 
     fn start_listener(&self) -> Result<(), io::Error> {
         let listener = TcpListener::bind((self.settings.interface_ip, self.settings.port))?;
+        listener.set_nonblocking(true)?;
         let inner = Arc::clone(&self.inner);
+        let shutdown = Arc::clone(&self.shutdown);
 
-        thread::spawn(move || {
-            for stream_result in listener.incoming() {
-                let Ok(stream) = stream_result else {
-                    log::error!("failed to accept connection: {}", stream_result.unwrap_err());
-                    continue;
-                };
-
-                let inner = Arc::clone(&inner);
-                thread::spawn(move || {
-                    if let Err(err) = inner.handle_connection(stream) {
-                        log::error!("failed to handle connection: {}", err);
+        let handle = thread::spawn(move || {
+            while !shutdown.load(Ordering::Relaxed) {
+                match listener.accept() {
+                    Ok((stream, _addr)) => {
+                        let inner = Arc::clone(&inner);
+                        let shutdown = Arc::clone(&shutdown);
+                        thread::spawn(move || {
+                            if shutdown.load(Ordering::Relaxed) {
+                                return;
+                            }
+                            if let Err(err) = inner.handle_connection(stream) {
+                                log::error!("failed to handle connection: {}", err);
+                            }
+                        });
                     }
-                });
+                    Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(50));
+                    }
+                    Err(err) => {
+                        log::error!("failed to accept connection: {}", err);
+                        thread::sleep(Duration::from_millis(200));
+                    }
+                }
             }
         });
+
+        self.handles.lock().unwrap().push(handle);
 
         Ok(())
     }
@@ -101,9 +145,10 @@ impl Service {
     fn start_mdns_registration(&self) -> Result<(), crate::xchange::Error> {
         let mdns = mdns_sd::ServiceDaemon::new()?;
         let inner = Arc::clone(&self.inner);
+        let shutdown = Arc::clone(&self.shutdown);
 
-        thread::spawn(move || {
-            loop {
+        let handle = thread::spawn(move || {
+            while !shutdown.load(Ordering::Relaxed) {
                 let settings = &inner.settings;
                 let service_result = ServiceInfo::new(
                     SERVICE_TYPE,
@@ -119,7 +164,7 @@ impl Service {
 
                 let Ok(service) = service_result else {
                     log::error!("failed to create mDNS service: {}", service_result.unwrap_err());
-                    thread::sleep(REGISTRATION_INTERVAL);
+                    thread::sleep(Duration::from_millis(200));
                     continue;
                 };
 
@@ -127,9 +172,19 @@ impl Service {
                     log::error!("failed to register mDNS service: {err}");
                 }
 
-                thread::sleep(REGISTRATION_INTERVAL);
+                let mut slept = Duration::ZERO;
+                while slept < REGISTRATION_INTERVAL && !shutdown.load(Ordering::Relaxed) {
+                    let step = Duration::from_millis(200);
+                    thread::sleep(step);
+                    slept += step;
+                }
             }
+
+            // Best-effort shutdown of the daemon
+            let _ = mdns.shutdown();
         });
+
+        self.handles.lock().unwrap().push(handle);
 
         Ok(())
     }
@@ -139,9 +194,15 @@ impl Service {
         let browser = mdns.browse(SERVICE_TYPE)?;
         let inner = Arc::clone(&self.inner);
         let settings = self.settings.clone();
+        let shutdown = Arc::clone(&self.shutdown);
 
-        thread::spawn(move || {
-            while let Ok(event) = browser.recv() {
+        let handle = thread::spawn(move || {
+            while !shutdown.load(Ordering::Relaxed) {
+                let event = match browser.recv_timeout(Duration::from_millis(250)) {
+                    Ok(event) => event,
+                    Err(_) => continue,
+                };
+
                 let ServiceEvent::ServiceResolved(service) = event else { continue };
 
                 let Some(uuid_str) = service.get_property_val_str("StationUUID") else {
@@ -159,6 +220,10 @@ impl Service {
                 }
 
                 for addr in service.get_addresses() {
+                    if shutdown.load(Ordering::Relaxed) {
+                        break;
+                    }
+
                     let socket_addr = SocketAddr::from((addr.to_ip_addr(), service.get_port()));
 
                     if let Err(err) = inner.send_join(socket_addr) {
@@ -166,7 +231,11 @@ impl Service {
                     }
                 }
             }
+
+            let _ = mdns.shutdown();
         });
+
+        self.handles.lock().unwrap().push(handle);
 
         Ok(())
     }
@@ -175,6 +244,17 @@ impl Service {
         let joined_uuids = self.inner.joined_stations.lock().unwrap();
         let stations = self.inner.stations.lock().unwrap();
         joined_uuids.iter().filter_map(|uuid| stations.get(uuid).cloned()).collect()
+    }
+}
+
+impl Drop for Service {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Relaxed);
+
+        let mut handles = self.handles.lock().unwrap();
+        for handle in handles.drain(..) {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -193,24 +273,18 @@ impl Inner {
         })
     }
 
-    pub fn start_purger(self: &Arc<Self>) {
-        let inner = Arc::clone(self);
-        thread::spawn(move || {
-            loop {
-                thread::sleep(Duration::from_secs(5));
-                let now = Instant::now();
-                let mut stations = inner.stations.lock().unwrap();
-                let mut joined = inner.joined_stations.lock().unwrap();
+    pub fn purge_once(&self) {
+        let now = Instant::now();
+        let mut stations = self.stations.lock().unwrap();
+        let mut joined = self.joined_stations.lock().unwrap();
 
-                stations.retain(|uuid, info| {
-                    let is_alive = now.duration_since(info.last_seen) < STALE_THRESHOLD;
-                    if !is_alive {
-                        joined.remove(uuid);
-                        log::info!("Station {} ({}) timed out", info.name, uuid);
-                    }
-                    is_alive
-                });
+        stations.retain(|uuid, info| {
+            let is_alive = now.duration_since(info.last_seen) < STALE_THRESHOLD;
+            if !is_alive {
+                joined.remove(uuid);
+                log::info!("Station {} ({}) timed out", info.name, uuid);
             }
+            is_alive
         });
     }
 
