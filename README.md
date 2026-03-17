@@ -15,7 +15,7 @@ Because these formats support thousands of devices across multiple manufacturers
 <details>
     <summary><strong>Note:</strong> This library is currently <strong>read-only</strong>. Modifying or re-serializing MVR/GDTF data is not supported. <em>Why?</em></summary>
 
-This library is designed for parsing and extracting data from MVR and GDTF files, not for editing or generating them. Adding support for modification and re-serialization would mean managing the lookups would become a lot more complicated (and in some cases slower). In the future, I might reconsider adding serialization support if I find the time and a nice way to handle this.
+    This library is designed for parsing and extracting data from MVR and GDTF files, not for editing or generating them. Adding support for modification and re-serialization would mean managing the lookups would become a lot more complicated (and in some cases slower). In the future, I might reconsider adding serialization support if I find the time and a nice way to handle this.
 </details>
 
 ## Cargo Features
@@ -25,13 +25,20 @@ By default, no features are selected.
 - `gdtf`: Enable parsing/reading GDTF files.
 - `mvr`: Enable parsing/reading MVR files (uses `gdtf`).
 
-Example:
-
-```sh
-cargo add mvr-gdtf -F mvr
-```
-
 ## Beta Release Roadmap
+**MVR-xchange (TCP Mode of protocol)**
+- [x] Automatically join stations in mDNS service.
+- [x] Purge stations that have timed out.
+- [ ] Follow API guidelines
+- [ ] Async API wrappers (maybe with `flume`?)
+- [ ] Documentation
+- [x] Handle `MVR_JOIN`
+- [x] Handle `MVR_LEAVE`
+- [x] Handle `MVR_COMMIT`
+- [ ] Handle `MVR_REQUEST`
+- [ ] Handle `MVR_NEW_SESSION_HOST`
+
+**MVR and GDTF**
 - [x] Completely parse shared files into Rust data types.
 - [ ] Completely parse GDTF files into Rust data types.
 - [ ] Completely parse MVR files into Rust data types.
@@ -40,6 +47,7 @@ cargo add mvr-gdtf -F mvr
 - [ ] Add lookups to get computed values (like channel counts or absolute DMX offsets) quickly.
 - [ ] Unit tests (Maybe mirror [libMVRgdtf](https://github.com/mvrdevelopment/libMVRgdtf)'s testsuite).
 - [ ] Add usage examples.
+- [ ] Documentation.
 
 ## Contributing
 Contributions are welcome. If you find a file that this library fails to parse correctly or want to request a feature or suggest a change, feel free to open an issue!
