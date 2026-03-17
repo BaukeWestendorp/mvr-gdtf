@@ -53,12 +53,12 @@ pub struct Service {
 
 impl Service {
     pub fn new(mut settings: Settings) -> Result<Self, crate::xchange::Error> {
-        let lossy_station_name: String = settings
+        // Sanitize the station name.
+        settings.station_name = settings
             .station_name
             .chars()
             .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '-' })
             .collect();
-        settings.station_name = lossy_station_name;
 
         let inner = Arc::new(Inner::new(settings.clone())?);
 
@@ -69,30 +69,27 @@ impl Service {
         self.start_listener()?;
         self.start_mdns_registration()?;
         self.start_mdns_browser_and_join()?;
+
         Ok(())
     }
 
     fn start_listener(&self) -> Result<(), io::Error> {
         let listener = TcpListener::bind((self.settings.interface_ip, self.settings.port))?;
+        let inner = Arc::clone(&self.inner);
 
-        thread::spawn({
-            let inner = Arc::clone(&self.inner);
-            move || {
-                for stream in listener.incoming() {
-                    match stream {
-                        Ok(stream) => {
-                            let inner = Arc::clone(&inner);
-                            thread::spawn(move || {
-                                if let Err(err) = inner.handle_connection(stream) {
-                                    log::error!("failed to handle connection: {}", err);
-                                }
-                            });
-                        }
-                        Err(err) => {
-                            log::error!("failed to accept connection: {}", err);
-                        }
+        thread::spawn(move || {
+            for stream_result in listener.incoming() {
+                let Ok(stream) = stream_result else {
+                    log::error!("failed to accept connection: {}", stream_result.unwrap_err());
+                    continue;
+                };
+
+                let inner = Arc::clone(&inner);
+                thread::spawn(move || {
+                    if let Err(err) = inner.handle_connection(stream) {
+                        log::error!("failed to handle connection: {}", err);
                     }
-                }
+                });
             }
         });
 
@@ -106,7 +103,7 @@ impl Service {
         thread::spawn(move || {
             loop {
                 let settings = &inner.settings;
-                let service = match ServiceInfo::new(
+                let service_result = ServiceInfo::new(
                     SERVICE_TYPE,
                     &settings.group_name,
                     &format!("{}.local.", settings.station_name),
@@ -116,13 +113,12 @@ impl Service {
                         ("StationName".to_string(), settings.station_name.to_string()),
                         ("StationUUID".to_string(), settings.station_uuid.to_string()),
                     ]),
-                ) {
-                    Ok(service) => service,
-                    Err(err) => {
-                        log::error!("failed to create mDNS service: {err}");
-                        thread::sleep(REGISTRATION_INTERVAL);
-                        continue;
-                    }
+                );
+
+                let Ok(service) = service_result else {
+                    log::error!("failed to create mDNS service: {}", service_result.unwrap_err());
+                    thread::sleep(REGISTRATION_INTERVAL);
+                    continue;
                 };
 
                 if let Err(err) = mdns.register(service) {
@@ -144,32 +140,28 @@ impl Service {
 
         thread::spawn(move || {
             while let Ok(event) = browser.recv() {
-                match event {
-                    ServiceEvent::ServiceResolved(resolved_service) => {
-                        let uuid_str = resolved_service.get_property_val_str("StationUUID");
-                        let Some(uuid) = uuid_str.and_then(|s| Uuid::parse_str(s).ok()) else {
-                            continue;
-                        };
+                let ServiceEvent::ServiceResolved(service) = event else { continue };
 
-                        if uuid == settings.station_uuid {
-                            // We don't need ourselves.
-                            continue;
-                        }
+                let Some(uuid_str) = service.get_property_val_str("StationUUID") else {
+                    continue;
+                };
+                let Ok(uuid) = Uuid::parse_str(uuid_str) else { continue };
 
-                        for addr in resolved_service.get_addresses() {
-                            let socket_addr =
-                                SocketAddr::from((addr.to_ip_addr(), resolved_service.get_port()));
+                // Prevent the service from attempting to handshake with itself.
+                if uuid == settings.station_uuid {
+                    continue;
+                }
 
-                            if inner.station_is_registered(&uuid) {
-                                continue;
-                            }
+                for addr in service.get_addresses() {
+                    let socket_addr = SocketAddr::from((addr.to_ip_addr(), service.get_port()));
 
-                            if let Err(err) = inner.send_join(socket_addr) {
-                                log::warn!("failed to send MVR_JOIN to {socket_addr}: {err}");
-                            }
-                        }
+                    if inner.station_is_registered(&uuid) {
+                        continue;
                     }
-                    _ => {}
+
+                    if let Err(err) = inner.send_join(socket_addr) {
+                        log::warn!("failed to send MVR_JOIN to {socket_addr}: {err}");
+                    }
                 }
             }
         });
@@ -201,10 +193,11 @@ impl Inner {
 
     fn send_join(&self, socket_addr: SocketAddr) -> Result<(), crate::xchange::Error> {
         let stream = TcpStream::connect_timeout(&socket_addr, Duration::from_millis(800))?;
-        let join = Packet::new(
+
+        Packet::new(
             PacketPayload::Join {
-                provider: self.settings.provider_name.to_owned(),
-                station_name: self.settings.station_name.to_owned(),
+                provider: self.settings.provider_name.clone(),
+                station_name: self.settings.station_name.clone(),
                 station_uuid: self.settings.station_uuid,
                 ver_major: self.settings.ver_major,
                 ver_minor: self.settings.ver_minor,
@@ -212,39 +205,37 @@ impl Inner {
             },
             0,
             1,
-        )?;
-        join.write(&stream)?;
+        )?
+        .write(&stream)?;
 
-        match Packet::read(&stream) {
-            Ok(packet) => match packet.payload {
-                PacketPayload::JoinRet {
-                    ok: true,
+        let packet = Packet::read(&stream)?;
+
+        match packet.payload {
+            PacketPayload::JoinRet {
+                ok: true,
+                provider,
+                station_name,
+                station_uuid,
+                ver_major,
+                ver_minor,
+                commits,
+                ..
+            } => {
+                self.join_station(StationInfo {
+                    uuid: station_uuid,
+                    name: station_name,
+                    address: stream.peer_addr()?,
                     provider,
-                    station_name,
-                    station_uuid,
                     ver_major,
                     ver_minor,
                     commits,
-                    ..
-                } => {
-                    self.join_station(StationInfo {
-                        uuid: station_uuid,
-                        name: station_name,
-                        address: stream.peer_addr()?,
-                        provider,
-                        ver_major,
-                        ver_minor,
-                        commits,
-                    });
-
-                    Ok(())
-                }
-                PacketPayload::JoinRet { ok: false, message, .. } => {
-                    Err(crate::xchange::Error::InvalidPacket { message })
-                }
-                _ => Err(crate::xchange::Error::UnexpectedPacket),
-            },
-            Err(e) => Err(e),
+                });
+                Ok(())
+            }
+            PacketPayload::JoinRet { ok: false, message, .. } => {
+                Err(crate::xchange::Error::InvalidPacket { message })
+            }
+            _ => Err(crate::xchange::Error::UnexpectedPacket),
         }
     }
 
@@ -270,12 +261,12 @@ impl Inner {
                     commits,
                 });
 
-                let join_ret = Packet::new(
+                Packet::new(
                     PacketPayload::JoinRet {
                         ok: true,
                         message: String::new(),
-                        provider: self.settings.provider_name.to_owned(),
-                        station_name: self.settings.station_name.to_owned(),
+                        provider: self.settings.provider_name.clone(),
+                        station_name: self.settings.station_name.clone(),
                         station_uuid: self.settings.station_uuid,
                         ver_major: self.settings.ver_major,
                         ver_minor: self.settings.ver_minor,
@@ -283,18 +274,14 @@ impl Inner {
                     },
                     0,
                     1,
-                )?;
-                join_ret.write(&stream)?;
+                )?
+                .write(&stream)?;
             }
             PacketPayload::Leave { from_station_uuid } => {
                 self.leave_station(&from_station_uuid);
 
-                let leave_ret = Packet::new(
-                    PacketPayload::LeaveRet { ok: true, message: String::new() },
-                    0,
-                    1,
-                )?;
-                leave_ret.write(&stream)?;
+                Packet::new(PacketPayload::LeaveRet { ok: true, message: String::new() }, 0, 1)?
+                    .write(&stream)?;
             }
             PacketPayload::Commit {
                 file_uuid,
@@ -319,19 +306,11 @@ impl Inner {
                     });
                 }
 
-                let commit_ret = Packet::new(
-                    PacketPayload::CommitRet { ok: true, message: String::new() },
-                    0,
-                    1,
-                )?;
-                commit_ret.write(&stream)?;
+                Packet::new(PacketPayload::CommitRet { ok: true, message: String::new() }, 0, 1)?
+                    .write(&stream)?;
             }
-            PacketPayload::Request { file_uuid: _, from_station_uuid: _ } => {
-                todo!("handle MVR_REQUEST");
-            }
-            PacketPayload::NewSessionHost { .. } => {
-                todo!("handle MVR_NEW_SESSION_HOST");
-            }
+            PacketPayload::Request { .. } => todo!("handle MVR_REQUEST"),
+            PacketPayload::NewSessionHost { .. } => todo!("handle MVR_NEW_SESSION_HOST"),
             _ => return Err(crate::xchange::Error::UnexpectedPacket),
         }
 
