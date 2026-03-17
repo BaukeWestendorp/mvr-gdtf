@@ -4,7 +4,7 @@ use std::{
     net::{IpAddr, SocketAddr, TcpListener, TcpStream},
     sync::{Arc, Mutex},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use mdns_sd::{ServiceEvent, ServiceInfo};
@@ -14,6 +14,7 @@ use crate::xchange::packet::{Commit, Packet, PacketPayload};
 
 pub const SERVICE_TYPE: &str = "_mvrxchange._tcp.local.";
 const REGISTRATION_INTERVAL: Duration = Duration::from_secs(10);
+const STALE_THRESHOLD: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
@@ -69,6 +70,7 @@ impl Service {
         self.start_listener()?;
         self.start_mdns_registration()?;
         self.start_mdns_browser_and_join()?;
+        self.inner.start_purger();
 
         Ok(())
     }
@@ -152,12 +154,12 @@ impl Service {
                     continue;
                 }
 
+                if inner.refresh_station(&uuid) {
+                    continue;
+                }
+
                 for addr in service.get_addresses() {
                     let socket_addr = SocketAddr::from((addr.to_ip_addr(), service.get_port()));
-
-                    if inner.station_is_registered(&uuid) {
-                        continue;
-                    }
 
                     if let Err(err) = inner.send_join(socket_addr) {
                         log::warn!("failed to send MVR_JOIN to {socket_addr}: {err}");
@@ -191,6 +193,36 @@ impl Inner {
         })
     }
 
+    pub fn start_purger(self: &Arc<Self>) {
+        let inner = Arc::clone(self);
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_secs(5));
+                let now = Instant::now();
+                let mut stations = inner.stations.lock().unwrap();
+                let mut joined = inner.joined_stations.lock().unwrap();
+
+                stations.retain(|uuid, info| {
+                    let is_alive = now.duration_since(info.last_seen) < STALE_THRESHOLD;
+                    if !is_alive {
+                        joined.remove(uuid);
+                        log::info!("Station {} ({}) timed out", info.name, uuid);
+                    }
+                    is_alive
+                });
+            }
+        });
+    }
+
+    fn refresh_station(&self, uuid: &Uuid) -> bool {
+        if let Some(station) = self.stations.lock().unwrap().get_mut(uuid) {
+            station.last_seen = Instant::now();
+            true
+        } else {
+            false
+        }
+    }
+
     fn send_join(&self, socket_addr: SocketAddr) -> Result<(), crate::xchange::Error> {
         let stream = TcpStream::connect_timeout(&socket_addr, Duration::from_millis(800))?;
 
@@ -221,15 +253,15 @@ impl Inner {
                 commits,
                 ..
             } => {
-                self.join_station(StationInfo {
-                    uuid: station_uuid,
-                    name: station_name,
-                    address: stream.peer_addr()?,
+                self.join_station(StationInfo::new(
+                    station_uuid,
+                    station_name,
+                    stream.peer_addr()?,
                     provider,
                     ver_major,
                     ver_minor,
                     commits,
-                });
+                ));
                 Ok(())
             }
             PacketPayload::JoinRet { ok: false, message, .. } => {
@@ -251,15 +283,15 @@ impl Inner {
                 ver_minor,
                 commits,
             } => {
-                self.join_station(StationInfo {
-                    uuid: station_uuid,
-                    name: station_name,
-                    address: stream.peer_addr()?,
+                self.join_station(StationInfo::new(
+                    station_uuid,
+                    station_name,
+                    stream.peer_addr()?,
                     provider,
                     ver_major,
                     ver_minor,
                     commits,
-                });
+                ));
 
                 Packet::new(
                     PacketPayload::JoinRet {
@@ -294,6 +326,7 @@ impl Inner {
                 comment,
             } => {
                 if let Some(station) = self.stations.lock().unwrap().get_mut(&station_uuid) {
+                    station.last_seen = Instant::now();
                     station.commits.push(Commit {
                         file_uuid,
                         station_uuid,
@@ -317,10 +350,6 @@ impl Inner {
         Ok(())
     }
 
-    fn station_is_registered(&self, station_uuid: &Uuid) -> bool {
-        self.stations.lock().unwrap().contains_key(station_uuid)
-    }
-
     fn join_station(&self, info: StationInfo) {
         self.joined_stations.lock().unwrap().insert(info.uuid);
         self.stations.lock().unwrap().insert(info.uuid, info);
@@ -328,6 +357,7 @@ impl Inner {
 
     fn leave_station(&self, uuid: &Uuid) {
         self.joined_stations.lock().unwrap().remove(uuid);
+        self.stations.lock().unwrap().remove(uuid);
     }
 }
 
@@ -340,9 +370,31 @@ pub struct StationInfo {
     ver_major: u32,
     ver_minor: u32,
     commits: Vec<Commit>,
+    last_seen: Instant,
 }
 
 impl StationInfo {
+    fn new(
+        uuid: Uuid,
+        name: String,
+        address: SocketAddr,
+        provider: String,
+        ver_major: u32,
+        ver_minor: u32,
+        commits: Vec<Commit>,
+    ) -> Self {
+        Self {
+            uuid,
+            name,
+            address,
+            provider,
+            ver_major,
+            ver_minor,
+            commits,
+            last_seen: Instant::now(),
+        }
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
