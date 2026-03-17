@@ -5,7 +5,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct PacketHeader {
-    pub magic: u32,
+    pub header: u32,
     pub version: u32,
     pub number: u32,
     pub count: u32,
@@ -15,16 +15,16 @@ pub struct PacketHeader {
 
 impl PacketHeader {
     pub const LEN: usize = 28;
-    pub const MAGIC: u32 = 778682;
+    pub const HEADER: u32 = 778682;
     pub const VERSION: u32 = 1;
 
     pub fn new(payload_length: u64, number: u32, count: u32, r#type: u32) -> Self {
-        Self { magic: Self::MAGIC, version: Self::VERSION, number, count, r#type, payload_length }
+        Self { header: Self::HEADER, version: Self::VERSION, number, count, r#type, payload_length }
     }
 
     pub fn encode(&self) -> [u8; Self::LEN] {
         let mut buf = [0u8; Self::LEN];
-        buf[0..4].copy_from_slice(&self.magic.to_be_bytes());
+        buf[0..4].copy_from_slice(&self.header.to_be_bytes());
         buf[4..8].copy_from_slice(&self.version.to_be_bytes());
         buf[8..12].copy_from_slice(&self.number.to_be_bytes());
         buf[12..16].copy_from_slice(&self.count.to_be_bytes());
@@ -44,7 +44,7 @@ impl PacketHeader {
             |start: usize| u64::from_be_bytes(bytes[start..start + 8].try_into().unwrap());
 
         Ok(Self {
-            magic: read_u32(0),
+            header: read_u32(0),
             version: read_u32(4),
             number: read_u32(8),
             count: read_u32(12),
@@ -185,7 +185,7 @@ pub enum PacketPayload {
 }
 
 impl PacketPayload {
-    pub fn r#type(&self) -> u32 {
+    pub fn payload_type(&self) -> u32 {
         match self {
             Self::File(_) => 1,
             _ => 0,
@@ -207,14 +207,13 @@ pub struct Packet {
 }
 
 impl Packet {
-    /// Creates a packet from a payload.
     pub fn new(
         payload: PacketPayload,
         number: u32,
         count: u32,
     ) -> Result<Self, crate::xchange::Error> {
         let bytes = payload.serialize_payload()?;
-        let header = PacketHeader::new(bytes.len() as u64, number, count, payload.r#type());
+        let header = PacketHeader::new(bytes.len() as u64, number, count, payload.payload_type());
         Ok(Self { header, payload })
     }
 
@@ -237,15 +236,19 @@ impl Packet {
     pub fn write<W: io::Write>(&self, mut writer: W) -> Result<(), crate::xchange::Error> {
         let payload_bytes = self.payload.serialize_payload()?;
 
-        let mut header = self.header.clone();
-        header.payload_length = payload_bytes.len() as u64;
-        header.r#type = self.payload.r#type();
+        let header = PacketHeader {
+            payload_length: payload_bytes.len() as u64,
+            r#type: self.payload.payload_type(),
+            ..self.header
+        };
 
-        // We have to make sure the bytes are send all at once, without splitting with multiple `write_all`s.
         let header_bytes = header.encode();
+
+        // Batch payload and header bytes together to prevent fragmented packets over the network.
         let mut bytes = Vec::with_capacity(header_bytes.len() + payload_bytes.len());
         bytes.extend_from_slice(&header_bytes);
         bytes.extend_from_slice(&payload_bytes);
+
         writer.write_all(&bytes)?;
         writer.flush()?;
 
