@@ -10,41 +10,44 @@ impl FileName {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    fn is_valid(&self) -> bool {
+        const RESERVED: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+        if self.0.is_empty()
+            || self.0.contains(RESERVED)
+            || self.0.chars().any(|c| c < '\u{20}')
+            || self.0.starts_with(' ')
+            || self.0.ends_with(' ')
+            || self.0.starts_with('.')
+            || self.0.ends_with('.')
+        {
+            return false;
+        }
+
+        let mut parts = self.0.rsplitn(2, '.');
+        let ext = parts.next();
+        let base = parts.next();
+
+        match (base, ext) {
+            (Some(base), Some(ext)) => !base.is_empty() && !ext.is_empty(),
+            _ => false,
+        }
+    }
 }
 
 impl str::FromStr for FileName {
     type Err = crate::mvr::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        fn is_valid(s: &str) -> bool {
-            const RESERVED: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+        let file_name = Self(s.to_owned());
 
-            if s.is_empty()
-                || s.contains(RESERVED)
-                || s.chars().any(|c| c < '\u{20}')
-                || s.starts_with(' ')
-                || s.ends_with(' ')
-                || s.starts_with('.')
-                || s.ends_with('.')
-            {
-                return false;
-            }
-
-            let mut parts = s.rsplitn(2, '.');
-            let ext = parts.next();
-            let base = parts.next();
-
-            match (base, ext) {
-                (Some(base), Some(ext)) => !base.is_empty() && !ext.is_empty(),
-                _ => false,
-            }
+        // FIXME: This check might be better off being moved into a validation function on a `MvrFile`.
+        if !file_name.is_valid() {
+            log::warn!("Parsed invalid/discouraged FileName: {s}");
         }
 
-        if is_valid(s) {
-            Ok(Self(s.to_owned()))
-        } else {
-            Err(crate::mvr::Error::InvalidFileName { misformatted_name: s.to_string() })
-        }
+        Ok(file_name)
     }
 }
 
