@@ -7,7 +7,7 @@ edition.workspace = true
 default = []
 mvr = ["gdtf"]
 gdtf = []
-xchange = ["mvr", "gdtf", "dep:local-ip-address", "dep:serde_json", "dep:mdns-sd"]
+xchange = ["mvr", "gdtf", "dep:local-ip-address", "dep:serde_json", "dep:mdns-sd", "dep:tokio", "dep:tokio-util", "dep:bytes", "dep:futures"]
 
 [dependencies]
 log = "0.4.29"
@@ -23,6 +23,10 @@ zip = { version = "8.1.0", default-features = false, features = ["deflate"] }
 local-ip-address = { version = "0.6.10", optional = true }
 mdns-sd = { version = "0.18.2", optional = true }
 serde_json = { version = "1.0.149", optional = true }
+tokio = { version = "1.50", features = ["rt", "net", "time", "macros"], optional = true }
+tokio-util = { version = "0.7", features = ["codec"], optional = true }
+bytes = { version = "1", optional = true }
+futures = { version = "0.3", optional = true }
 
 [lints]
 workspace = true
@@ -33,3 +37,4 @@ required-features = ["xchange"]
 
 [dev-dependencies]
 pretty_env_logger = "0.5.0"
+tokio = { version = "1.50", features = ["rt-multi-thread"] }
