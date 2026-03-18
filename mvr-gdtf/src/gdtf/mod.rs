@@ -1,5 +1,6 @@
 use std::{fs::File, io::Read as _, path::Path};
 
+use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::{Resource, load_zip};
@@ -15,16 +16,20 @@ pub use value::*;
 pub struct GdtfFile {
     description: GdtfDescription,
     resources: Vec<Resource>,
+
+    file_name: String,
+    file_size: u64,
+    file_hash_uuid: Uuid,
 }
 
 impl GdtfFile {
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, crate::Error> {
         let path = path.as_ref();
 
-        let mut zip = load_zip(path)?;
+        let (file_name, file_size, file_hash_uuid, mut zip) = load_zip(path)?;
         let description = load_description(&mut zip)?;
 
-        Ok(Self { description, resources: Vec::new() })
+        Ok(Self { description, resources: Vec::new(), file_name, file_size, file_hash_uuid })
     }
 
     pub fn description(&self) -> &GdtfDescription {
@@ -33,6 +38,18 @@ impl GdtfFile {
 
     pub fn resources(&self) -> &[Resource] {
         &self.resources
+    }
+
+    pub fn file_name(&self) -> &str {
+        &self.file_name
+    }
+
+    pub fn file_size(&self) -> u64 {
+        self.file_size
+    }
+
+    pub fn file_hash_uuid(&self) -> Uuid {
+        self.file_hash_uuid
     }
 }
 

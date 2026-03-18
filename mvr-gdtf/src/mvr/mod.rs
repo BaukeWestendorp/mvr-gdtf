@@ -1,5 +1,6 @@
 use std::{fs::File, io::Read as _, path::Path};
 
+use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::{Resource, gdtf::GdtfFile, load_zip};
@@ -16,16 +17,27 @@ pub struct MvrFile {
     general_scene_description: GeneralSceneDescription,
     gdtf_files: Vec<GdtfFile>,
     resources: Vec<Resource>,
+
+    file_name: String,
+    file_size: u64,
+    file_hash_uuid: Uuid,
 }
 
 impl MvrFile {
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self, crate::Error> {
         let path = path.as_ref();
 
-        let mut zip = load_zip(path)?;
+        let (file_name, file_size, file_hash_uuid, mut zip) = load_zip(path)?;
         let general_scene_description = load_general_scene_description(&mut zip)?;
 
-        Ok(Self { general_scene_description, gdtf_files: Vec::new(), resources: Vec::new() })
+        Ok(Self {
+            general_scene_description,
+            gdtf_files: Vec::new(),
+            resources: Vec::new(),
+            file_name,
+            file_size,
+            file_hash_uuid,
+        })
     }
 
     pub fn general_scene_description(&self) -> &GeneralSceneDescription {
@@ -38,6 +50,18 @@ impl MvrFile {
 
     pub fn resources(&self) -> &[Resource] {
         &self.resources
+    }
+
+    pub fn file_name(&self) -> &str {
+        &self.file_name
+    }
+
+    pub fn file_size(&self) -> u64 {
+        self.file_size
+    }
+
+    pub fn file_hash_uuid(&self) -> Uuid {
+        self.file_hash_uuid
     }
 }
 
