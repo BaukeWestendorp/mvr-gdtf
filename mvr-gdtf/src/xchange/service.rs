@@ -682,18 +682,26 @@ impl StationInfo {
         }
     }
 
+    pub fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+
     pub fn name(&self) -> &str {
         &self.name
     }
+
     pub fn provider(&self) -> &str {
         &self.provider
     }
+
     pub fn ver_major(&self) -> u32 {
         self.ver_major
     }
+
     pub fn ver_minor(&self) -> u32 {
         self.ver_minor
     }
+
     pub fn commits(&self) -> &[Commit] {
         &self.commits
     }
