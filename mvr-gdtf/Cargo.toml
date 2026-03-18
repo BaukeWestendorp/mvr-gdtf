@@ -7,7 +7,17 @@ edition.workspace = true
 default = []
 mvr = ["gdtf"]
 gdtf = []
-xchange = ["mvr", "gdtf", "dep:local-ip-address", "dep:serde_json", "dep:mdns-sd", "dep:tokio", "dep:tokio-util", "dep:bytes", "dep:futures"]
+xchange = [
+    "mvr",
+    "gdtf",
+    "dep:bytes",
+    "dep:futures-util",
+    "dep:local-ip-address",
+    "dep:mdns-sd",
+    "dep:serde_json",
+    "dep:tokio",
+    "dep:tokio-util",
+]
 
 [dependencies]
 log = "0.4.29"
@@ -26,7 +36,7 @@ serde_json = { version = "1.0.149", optional = true }
 tokio = { version = "1.50", features = ["rt", "net", "time", "macros"], optional = true }
 tokio-util = { version = "0.7", features = ["codec"], optional = true }
 bytes = { version = "1", optional = true }
-futures = { version = "0.3", optional = true }
+futures-util = { version = "0.3", optional = true, default-features = false, features = ["sink"] }
 seahash = "4.1.0"
 
 [lints]

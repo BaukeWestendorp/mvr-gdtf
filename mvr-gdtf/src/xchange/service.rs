@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{SinkExt as _, StreamExt as _};
+use futures_util::{SinkExt as _, StreamExt};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tokio::{
     net::{TcpListener, TcpStream},
