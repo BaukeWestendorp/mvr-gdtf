@@ -44,7 +44,7 @@ impl str::FromStr for FileName {
 
         // FIXME: This check might be better off being moved into a validation function on a `MvrFile`.
         if !file_name.is_valid() {
-            log::warn!("Parsed invalid/discouraged FileName: {s}");
+            log::debug!("Parsed invalid/discouraged FileName: {s}");
         }
 
         Ok(file_name)
