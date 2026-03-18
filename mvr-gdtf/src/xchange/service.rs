@@ -5,7 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{SinkExt, StreamExt};
+use futures::{SinkExt as _, StreamExt as _};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -56,7 +56,7 @@ impl Default for Settings {
 
 pub struct Service {
     inner: Arc<Inner>,
-    cancel: CancellationToken,
+    cancel: Mutex<CancellationToken>,
     tasks: Mutex<JoinSet<()>>,
 }
 
@@ -70,20 +70,61 @@ impl Service {
             .collect();
 
         let inner = Arc::new(Inner::new(settings));
+        let service = Self {
+            inner,
+            cancel: Mutex::new(CancellationToken::new()),
+            tasks: Mutex::new(JoinSet::new()),
+        };
+        service.start().await?;
+        Ok(service)
+    }
+
+    pub async fn start(&self) -> Result<(), crate::xchange::Error> {
+        let mut cancel_guard = self.cancel.lock().unwrap();
+        let mut tasks_guard = self.tasks.lock().unwrap();
+
+        if !tasks_guard.is_empty() {
+            log::warn!("Service::start() called but service is already running.");
+            return Ok(());
+        }
+
+        let addr = (self.inner.settings.interface_ip, self.inner.settings.port);
+        let listener = TcpListener::bind(addr).await?;
+        let mdns = ServiceDaemon::new()?;
+
         let cancel = CancellationToken::new();
         let mut tasks = JoinSet::new();
 
-        let addr = (inner.settings.interface_ip, inner.settings.port);
-        let listener = TcpListener::bind(addr).await?;
+        tasks.spawn(Self::run_listener(Arc::clone(&self.inner), listener, cancel.clone()));
+        tasks.spawn(Self::run_mdns_registration(
+            Arc::clone(&self.inner),
+            mdns.clone(),
+            cancel.clone(),
+        ));
+        tasks.spawn(Self::run_mdns_browser(Arc::clone(&self.inner), mdns, cancel.clone()));
+        tasks.spawn(Self::run_purger(Arc::clone(&self.inner), cancel.clone()));
 
-        let mdns = mdns_sd::ServiceDaemon::new()?;
+        *cancel_guard = cancel;
+        *tasks_guard = tasks;
+        Ok(())
+    }
 
-        tasks.spawn(Self::run_listener(Arc::clone(&inner), listener, cancel.clone()));
-        tasks.spawn(Self::run_mdns_registration(Arc::clone(&inner), mdns.clone(), cancel.clone()));
-        tasks.spawn(Self::run_mdns_browser(Arc::clone(&inner), mdns, cancel.clone()));
-        tasks.spawn(Self::run_purger(Arc::clone(&inner), cancel.clone()));
+    /// Gracefully shuts down all background tasks and sends MVR_LEAVE to every
+    /// known station.
+    pub async fn shutdown(&self) {
+        let cancel_guard = self.cancel.lock().unwrap();
+        let mut tasks_guard = self.tasks.lock().unwrap();
 
-        Ok(Self { inner, cancel, tasks: Mutex::new(tasks) })
+        let _ = self.leave_all().await;
+        cancel_guard.cancel();
+        while let Some(result) = tasks_guard.join_next().await {
+            if let Err(err) = result {
+                if !err.is_cancelled() {
+                    log::warn!("Task exited with error: {err}");
+                }
+            }
+        }
+        tasks_guard.abort_all();
     }
 
     pub async fn join(&self, uuid: Uuid) -> Result<(), crate::xchange::Error> {
@@ -118,21 +159,6 @@ impl Service {
         let registered = self.inner.registered_stations.read().await;
         let stations = self.inner.stations.read().await;
         registered.iter().filter_map(|uuid| stations.get(uuid).cloned()).collect()
-    }
-
-    /// Gracefully shuts down all background tasks and sends MVR_LEAVE to every
-    /// known station.
-    pub async fn shutdown(&self) {
-        let _ = self.leave_all().await;
-        self.cancel.cancel();
-        let mut tasks = self.tasks.lock().unwrap();
-        while let Some(result) = tasks.join_next().await {
-            if let Err(err) = result {
-                if !err.is_cancelled() {
-                    log::warn!("Task exited with error: {err}");
-                }
-            }
-        }
     }
 
     async fn run_listener(inner: Arc<Inner>, listener: TcpListener, cancel: CancellationToken) {
@@ -250,7 +276,7 @@ impl Service {
 
 impl Drop for Service {
     fn drop(&mut self) {
-        self.cancel.cancel();
+        self.cancel.lock().unwrap().cancel();
         self.tasks.lock().unwrap().abort_all();
     }
 }
@@ -401,7 +427,7 @@ impl Inner {
 
         let packet = framed.next().await.ok_or(crate::xchange::Error::ConnectionClosed)??;
 
-        let reply_payload = match packet.payload {
+        let ret_packet = match packet.payload {
             PacketPayload::Join {
                 provider,
                 station_name,
@@ -470,7 +496,7 @@ impl Inner {
             _ => return Err(crate::xchange::Error::UnexpectedPacket),
         };
 
-        framed.send(Packet::new(reply_payload, 0, 1)?).await?;
+        framed.send(Packet::new(ret_packet, 0, 1)?).await?;
         Ok(())
     }
 }
