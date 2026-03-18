@@ -26,6 +26,8 @@ const REGISTRATION_INTERVAL: Duration = Duration::from_secs(10);
 const STALE_THRESHOLD: Duration = Duration::from_secs(30);
 const PURGE_INTERVAL: Duration = Duration::from_secs(5);
 
+type StationEventHandler = Arc<dyn Fn(StationInfo) + Send + Sync + 'static>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub provider_name: String,
@@ -80,6 +82,24 @@ impl Service {
         };
 
         Ok(service)
+    }
+
+    /// Set a handler that will be called whenever a station is added/registered
+    /// (either by receiving a `MVR_JOIN` or a successful `MVR_JOIN_RET`).
+    pub fn on_join<F>(&self, handler: F)
+    where
+        F: Fn(StationInfo) + Send + Sync + 'static,
+    {
+        *self.inner.on_join.lock().unwrap() = Some(Arc::new(handler));
+    }
+
+    /// Set a handler that will be called whenever a station is removed/unregistered
+    /// (either due to `MVR_LEAVE`, `MVR_LEAVE_RET`, or a stale timeout purge).
+    pub fn on_leave<F>(&self, handler: F)
+    where
+        F: Fn(StationInfo) + Send + Sync + 'static,
+    {
+        *self.inner.on_leave.lock().unwrap() = Some(Arc::new(handler));
     }
 
     pub async fn start(&self) -> Result<(), crate::xchange::Error> {
@@ -162,7 +182,7 @@ impl Service {
         &self,
         target_uuid: Uuid,
         mvr_file: &MvrFile,
-        comment: Option<impl Into<String>>,
+        comment: Option<String>,
         ver_major: u32,
         ver_minor: u32,
     ) -> Result<(), crate::xchange::Error> {
@@ -185,7 +205,7 @@ impl Service {
 
     pub async fn commit_all(
         &self,
-        mvr_file: MvrFile,
+        mvr_file: &MvrFile,
         comment: Option<impl Into<String>>,
         ver_major: u32,
         ver_minor: u32,
@@ -194,7 +214,7 @@ impl Service {
 
         for info in self.stations().await {
             if let Err(err) =
-                self.commit(info.uuid, &mvr_file, comment.clone(), ver_major, ver_minor).await
+                self.commit(info.uuid, mvr_file, comment.clone(), ver_major, ver_minor).await
             {
                 log::warn!("Failed to send commit to station {}: {}", info.uuid, err);
             }
@@ -332,6 +352,9 @@ struct Inner {
     settings: Settings,
     stations: RwLock<HashMap<Uuid, StationInfo>>,
     registered_stations: RwLock<HashSet<Uuid>>,
+
+    on_join: Mutex<Option<StationEventHandler>>,
+    on_leave: Mutex<Option<StationEventHandler>>,
 }
 
 impl Inner {
@@ -340,22 +363,58 @@ impl Inner {
             settings,
             stations: RwLock::new(HashMap::new()),
             registered_stations: RwLock::new(HashSet::new()),
+
+            on_join: Mutex::new(None),
+            on_leave: Mutex::new(None),
+        }
+    }
+
+    fn emit_on_join(&self, info: StationInfo) {
+        let handler = self.on_join.lock().unwrap().clone();
+        if let Some(handler) = handler {
+            handler(info);
+        }
+    }
+
+    fn emit_on_leave(&self, info: StationInfo) {
+        let handler = self.on_leave.lock().unwrap().clone();
+        if let Some(handler) = handler {
+            handler(info);
         }
     }
 
     async fn purge_stale(&self) {
         let now = Instant::now();
-        let mut stations = self.stations.write().await;
-        let mut registered = self.registered_stations.write().await;
 
-        stations.retain(|uuid, info| {
-            let alive = now.duration_since(info.last_seen) < STALE_THRESHOLD;
-            if !alive {
+        let stale: Vec<(Uuid, StationInfo)> = {
+            let stations = self.stations.read().await;
+            stations
+                .iter()
+                .filter_map(|(uuid, info)| {
+                    let alive = now.duration_since(info.last_seen) < STALE_THRESHOLD;
+                    (!alive).then(|| (*uuid, info.clone()))
+                })
+                .collect()
+        };
+
+        if stale.is_empty() {
+            return;
+        }
+
+        {
+            let mut registered = self.registered_stations.write().await;
+            let mut stations = self.stations.write().await;
+
+            for (uuid, info) in &stale {
                 registered.remove(uuid);
+                stations.remove(uuid);
                 log::info!("Station {} ({}) timed out", info.name, uuid);
             }
-            alive
-        });
+        }
+
+        for (_uuid, info) in stale {
+            self.emit_on_leave(info);
+        }
     }
 
     async fn refresh_station(&self, uuid: &Uuid) -> bool {
@@ -377,13 +436,25 @@ impl Inner {
     }
 
     async fn register_station(&self, info: StationInfo) {
-        self.registered_stations.write().await.insert(info.uuid);
-        self.stations.write().await.insert(info.uuid, info);
+        let uuid = info.uuid;
+        let inserted = self.registered_stations.write().await.insert(uuid);
+        self.stations.write().await.insert(uuid, info.clone());
+
+        // Only emit on first time.
+        if inserted {
+            self.emit_on_join(info);
+        }
     }
 
     async fn unregister_station(&self, uuid: &Uuid) {
-        self.registered_stations.write().await.remove(uuid);
-        self.stations.write().await.remove(uuid);
+        let removed_info = self.stations.write().await.remove(uuid);
+        let was_registered = self.registered_stations.write().await.remove(uuid);
+
+        if was_registered {
+            if let Some(info) = removed_info {
+                self.emit_on_leave(info);
+            }
+        }
     }
 
     async fn send_packet_and_recv(
