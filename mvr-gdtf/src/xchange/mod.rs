@@ -1,4 +1,3 @@
-// mod client;
 mod error;
 mod packet;
 mod service;
