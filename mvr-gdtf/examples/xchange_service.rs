@@ -14,8 +14,9 @@ async fn main() {
         station_uuid,
         ..Default::default()
     })
-    .await
     .unwrap();
+
+    service.start().await.unwrap();
 
     loop {
         for info in service.stations().await {

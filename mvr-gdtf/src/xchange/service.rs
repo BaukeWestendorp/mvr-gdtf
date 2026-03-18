@@ -16,7 +16,10 @@ use tokio::{
 use tokio_util::{codec::Framed, sync::CancellationToken};
 use uuid::Uuid;
 
-use crate::xchange::packet::{Commit, Packet, PacketCodec, PacketPayload};
+use crate::{
+    mvr::MvrFile,
+    xchange::packet::{Commit, Packet, PacketCodec, PacketPayload},
+};
 
 pub const SERVICE_TYPE: &str = "_mvrxchange._tcp.local.";
 const REGISTRATION_INTERVAL: Duration = Duration::from_secs(10);
@@ -127,8 +130,8 @@ impl Service {
         tasks_guard.abort_all();
     }
 
-    pub async fn join(&self, uuid: Uuid) -> Result<(), crate::xchange::Error> {
-        let addr = self.inner.station_addr(uuid).await?;
+    pub async fn join(&self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
+        let addr = self.inner.station_addr(target_uuid).await?;
         self.inner.send_join(addr).await
     }
 
@@ -141,15 +144,59 @@ impl Service {
         Ok(())
     }
 
-    pub async fn leave(&self, uuid: Uuid) -> Result<(), crate::xchange::Error> {
-        let addr = self.inner.station_addr(uuid).await?;
-        self.inner.send_leave(uuid, addr).await
+    pub async fn leave(&self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
+        let addr = self.inner.station_addr(target_uuid).await?;
+        self.inner.send_leave(target_uuid, addr).await
     }
 
     pub async fn leave_all(&self) -> Result<(), crate::xchange::Error> {
         for info in self.stations().await {
             if let Err(err) = self.leave(info.uuid).await {
                 log::warn!("Failed to leave station {}: {}", info.uuid, err);
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn commit(
+        &self,
+        target_uuid: Uuid,
+        mvr_file: &MvrFile,
+        comment: Option<impl Into<String>>,
+        ver_major: u32,
+        ver_minor: u32,
+    ) -> Result<(), crate::xchange::Error> {
+        let commit = Commit {
+            file_uuid: mvr_file.file_hash_uuid(),
+            station_uuid: self.inner.settings.station_uuid,
+            file_size: mvr_file.file_size(),
+            ver_major,
+            ver_minor,
+            for_stations_uuid: Vec::new(),
+            file_name: Some(mvr_file.file_name().to_string()),
+            comment: comment.map(Into::into),
+        };
+
+        let addr = self.inner.station_addr(target_uuid).await?;
+        self.inner.send_commit(commit.clone(), addr).await?;
+
+        Ok(())
+    }
+
+    pub async fn commit_all(
+        &self,
+        mvr_file: MvrFile,
+        comment: Option<impl Into<String>>,
+        ver_major: u32,
+        ver_minor: u32,
+    ) -> Result<(), crate::xchange::Error> {
+        let comment = comment.map(Into::into);
+
+        for info in self.stations().await {
+            if let Err(err) =
+                self.commit(info.uuid, &mvr_file, comment.clone(), ver_major, ver_minor).await
+            {
+                log::warn!("Failed to send commit to station {}: {}", info.uuid, err);
             }
         }
         Ok(())
@@ -415,6 +462,35 @@ impl Inner {
                 Ok(())
             }
             PacketPayload::LeaveRet { ok: false, message, .. } => {
+                Err(crate::xchange::Error::InvalidPacket { message })
+            }
+            _ => Err(crate::xchange::Error::UnexpectedPacket),
+        }
+    }
+
+    async fn send_commit(
+        &self,
+        commit: Commit,
+        socket_addr: SocketAddr,
+    ) -> Result<(), crate::xchange::Error> {
+        let packet = Packet::new(
+            PacketPayload::Commit {
+                file_uuid: commit.file_uuid,
+                station_uuid: commit.station_uuid,
+                file_size: commit.file_size,
+                ver_major: commit.ver_major,
+                ver_minor: commit.ver_minor,
+                for_stations_uuid: commit.for_stations_uuid,
+                file_name: commit.file_name,
+                comment: commit.comment,
+            },
+            0,
+            1,
+        )?;
+
+        match self.send_packet_and_recv(socket_addr, packet).await?.payload {
+            PacketPayload::CommitRet { ok: true, .. } => Ok(()),
+            PacketPayload::CommitRet { ok: false, message, .. } => {
                 Err(crate::xchange::Error::InvalidPacket { message })
             }
             _ => Err(crate::xchange::Error::UnexpectedPacket),
