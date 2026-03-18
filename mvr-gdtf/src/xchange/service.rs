@@ -61,7 +61,7 @@ pub struct Service {
 }
 
 impl Service {
-    pub async fn new(mut settings: Settings) -> Result<Self, crate::xchange::Error> {
+    pub fn new(mut settings: Settings) -> Result<Self, crate::xchange::Error> {
         // Sanitize the station name.
         settings.station_name = settings
             .station_name
@@ -75,7 +75,7 @@ impl Service {
             cancel: Mutex::new(CancellationToken::new()),
             tasks: Mutex::new(JoinSet::new()),
         };
-        service.start().await?;
+
         Ok(service)
     }
 
