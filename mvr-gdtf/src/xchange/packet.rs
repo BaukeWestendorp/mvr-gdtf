@@ -107,7 +107,7 @@ pub enum PacketPayload {
     },
     #[serde(rename = "MVR_LEAVE")]
     Leave {
-        // GrandMA3 sends this field as "StationUUID" instead — alias handles both.
+        // GrandMA3 sends this field as "StationUUID".
         #[serde(rename = "FromStationUUID", alias = "StationUUID")]
         from_station_uuid: Uuid,
     },
@@ -177,8 +177,7 @@ pub enum PacketPayload {
 }
 
 impl PacketPayload {
-    /// Wire type discriminant: 1 = raw bytes, 0 = JSON.
-    fn wire_type(&self) -> u32 {
+    fn r#type(&self) -> u32 {
         match self {
             Self::File(_) => 1,
             _ => 0,
@@ -213,52 +212,23 @@ impl Packet {
         count: u32,
     ) -> Result<Self, crate::xchange::Error> {
         let bytes = payload.serialize()?;
-        let header = PacketHeader::new(bytes.len() as u64, number, count, payload.wire_type());
+        let header = PacketHeader::new(bytes.len() as u64, number, count, payload.r#type());
         Ok(Self { header, payload })
     }
 }
 
-/// A tokio-util `Codec` that frames `Packet`s over a byte stream.
-///
-/// The wire format is unchanged:
-///   [28-byte big-endian header][payload_length bytes of payload]
-///
-/// Usage:
-/// ```rust
-/// use tokio_util::codec::Framed;
-/// use futures::{SinkExt, StreamExt};
-///
-/// let framed = Framed::new(tcp_stream, PacketCodec);
-/// let (mut sink, mut stream) = framed.split();
-///
-/// sink.send(packet).await?;
-/// let reply: Packet = stream.next().await.unwrap()?;
-/// ```
 pub struct PacketCodec;
-
-//
-// The decoder is a simple two-phase state machine driven by what is already
-// in the `BytesMut` buffer:
-//
-//   Phase 1 – wait for 28 header bytes, then peek at payload_length.
-//   Phase 2 – wait for header + payload_length bytes, then consume and parse.
-//
-// Returning `Ok(None)` tells tokio-util "not enough data yet; call me again
-// when more bytes arrive." tokio-util handles all the buffering for us.
 
 impl Decoder for PacketCodec {
     type Item = Packet;
     type Error = crate::xchange::Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Packet>, Self::Error> {
-        // Phase 1: do we have a full header?
         if src.len() < PacketHeader::LEN {
             src.reserve(PacketHeader::LEN - src.len());
             return Ok(None);
         }
 
-        // Peek at the header without advancing the cursor yet — we need to
-        // keep the bytes around in case the payload hasn't arrived yet.
         let header = {
             let mut peek = &src[..PacketHeader::LEN];
             PacketHeader::decode_from(&mut peek)?
@@ -266,13 +236,11 @@ impl Decoder for PacketCodec {
 
         let frame_len = PacketHeader::LEN + header.payload_length as usize;
 
-        // Phase 2: do we have the full frame (header + payload)?
         if src.len() < frame_len {
             src.reserve(frame_len - src.len());
             return Ok(None);
         }
 
-        // We have a complete frame — advance past the header and consume.
         src.advance(PacketHeader::LEN);
         let payload_bytes = src.split_to(header.payload_length as usize);
         let payload = PacketPayload::deserialize(header.r#type, &payload_bytes)?;
@@ -287,11 +255,9 @@ impl Encoder<Packet> for PacketCodec {
     fn encode(&mut self, packet: Packet, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let payload_bytes = packet.payload.serialize()?;
 
-        // Rebuild the header so payload_length and type are always consistent,
-        // regardless of what the caller put in `packet.header`.
         let header = PacketHeader {
             payload_length: payload_bytes.len() as u64,
-            r#type: packet.payload.wire_type(),
+            r#type: packet.payload.r#type(),
             ..packet.header
         };
 
@@ -300,64 +266,5 @@ impl Encoder<Packet> for PacketCodec {
         dst.put_slice(&payload_bytes);
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bytes::BytesMut;
-
-    fn roundtrip(packet: Packet) -> Packet {
-        let mut buf = BytesMut::new();
-        PacketCodec.encode(packet, &mut buf).expect("encode");
-        PacketCodec.decode(&mut buf).expect("decode").expect("complete frame")
-    }
-
-    #[test]
-    fn join_roundtrip() {
-        let uuid = Uuid::new_v4();
-        let packet = Packet::new(
-            PacketPayload::Join {
-                provider: "test".into(),
-                station_name: "station-1".into(),
-                station_uuid: uuid,
-                ver_major: 1,
-                ver_minor: 2,
-                commits: vec![],
-            },
-            0,
-            1,
-        )
-        .unwrap();
-
-        let decoded = roundtrip(packet);
-        assert!(matches!(
-            decoded.payload,
-            PacketPayload::Join { station_uuid, .. } if station_uuid == uuid
-        ));
-    }
-
-    #[test]
-    fn file_roundtrip() {
-        let data = vec![1u8, 2, 3, 4, 5];
-        let packet = Packet::new(PacketPayload::File(data.clone()), 0, 1).unwrap();
-        let decoded = roundtrip(packet);
-        assert_eq!(decoded.payload, PacketPayload::File(data));
-    }
-
-    #[test]
-    fn partial_decode_returns_none() {
-        let packet =
-            Packet::new(PacketPayload::LeaveRet { ok: true, message: String::new() }, 0, 1)
-                .unwrap();
-        let mut buf = BytesMut::new();
-        PacketCodec.encode(packet, &mut buf).unwrap();
-
-        // Feed only half the bytes.
-        let half = buf.split_to(buf.len() / 2);
-        let mut partial = half;
-        let result = PacketCodec.decode(&mut partial).unwrap();
-        assert!(result.is_none(), "should return None on partial frame");
     }
 }

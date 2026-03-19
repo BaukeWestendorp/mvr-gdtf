@@ -13,6 +13,8 @@ pub enum Error {
     Timeout,
     #[error("Connection closed")]
     ConnectionClosed,
+    #[error("The service has been shutdown")]
+    Shutdown,
 
     #[error("Packet serialization error: {0}")]
     PacketSerialization(#[from] serde_json::Error),

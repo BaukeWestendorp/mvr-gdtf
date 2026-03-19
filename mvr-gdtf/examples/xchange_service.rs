@@ -16,10 +16,8 @@ async fn main() {
     })
     .unwrap();
 
-    service.start().await.unwrap();
-
     loop {
-        for info in service.stations().await {
+        for info in service.stations().await.unwrap() {
             eprintln!("{info:?}");
         }
         eprintln!("------------------");
