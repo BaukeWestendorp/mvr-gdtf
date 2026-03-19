@@ -40,7 +40,7 @@ type StationEventHandler = Arc<dyn Fn(StationInfo) + Send + Sync + 'static>;
 pub struct Settings {
     /// Name of the application or tool.
     pub provider_name: String,
-    /// Group name used in the mDNS service advertisement.
+    /// Group name used in the mDNS service registration.
     pub group_name: String,
     /// Human-readable name for this station.
     pub station_name: String,
@@ -714,7 +714,6 @@ impl Inner {
         Ok(())
     }
 
-    // FIXME: SPEC: This also triggers a MVR_COMMIT message to other connected stations.
     async fn do_request(
         &mut self,
         file_uuid: Option<Uuid>,
@@ -735,7 +734,6 @@ impl Inner {
         Ok(None)
     }
 
-    // FIXME: SPEC: This also triggers a MVR_COMMIT message to other connected stations.
     async fn do_request_all(&mut self) -> Result<Vec<RequestedFile>, crate::xchange::Error> {
         let mut files = Vec::new();
 
@@ -908,9 +906,3 @@ impl RequestedFile {
         &self.bytes
     }
 }
-
-// TODO: Send `MVR_REQUEST_RET`.
-// TODO: Service should take folder for MVR files
-// TODO: Send MVR_COMMIT to all stations when requested and it's added to folder.
-// TODO: CLI should use single folder.
-// TODO: Handle `MVR_REQUEST` packet sent to us.
