@@ -885,14 +885,18 @@ async fn send_packet_and_recv(
     framed.next().await.ok_or(crate::xchange::Error::ConnectionClosed)?
 }
 
+/// A file that has been requested using `MVR_REQUEST`.
 pub struct RequestedFile {
+    /// The file's UUID.
     pub uuid: Uuid,
-    pub file_name: String,
+    /// The file's name.
+    pub name: String,
+    /// The raw bytes of the compressed file.
     pub bytes: Vec<u8>,
 }
 
-// TODO: Docs for requested file.
 // TODO: Send `MVR_REQUEST_RET`.
 // TODO: Service should take folder for MVR files
 // TODO: Send MVR_COMMIT to all stations when requested and it's added to folder.
 // TODO: CLI should use single folder.
+// TODO: Handle `MVR_REQUEST` packet sent to us.
