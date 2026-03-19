@@ -729,7 +729,7 @@ impl Inner {
                     .and_then(|s| s.commits().iter().find_map(|c| c.file_name.to_owned()))
                     .unwrap_or(format!("{}.mvr", file_uuid.unwrap_or_default()));
 
-                return Ok(Some(RequestedFile { uuid: station_uuid, file_name, bytes }));
+                return Ok(Some(RequestedFile { uuid: station_uuid, name: file_name, bytes }));
             }
         }
         Ok(None)
@@ -753,7 +753,7 @@ impl Inner {
                     Ok(Some(bytes)) => {
                         files.push(RequestedFile {
                             uuid: commit.file_uuid,
-                            file_name: commit
+                            name: commit
                                 .file_name
                                 .clone()
                                 .unwrap_or(format!("{}.mvr", commit.file_uuid)),
@@ -887,12 +887,26 @@ async fn send_packet_and_recv(
 
 /// A file that has been requested using `MVR_REQUEST`.
 pub struct RequestedFile {
+    uuid: Uuid,
+    name: String,
+    bytes: Vec<u8>,
+}
+
+impl RequestedFile {
     /// The file's UUID.
-    pub uuid: Uuid,
+    pub fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+
     /// The file's name.
-    pub name: String,
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// The raw bytes of the compressed file.
-    pub bytes: Vec<u8>,
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
 }
 
 // TODO: Send `MVR_REQUEST_RET`.
