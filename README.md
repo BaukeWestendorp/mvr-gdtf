@@ -30,11 +30,11 @@ By default, no features are selected.
 - [x] Automatically join stations in mDNS service.
 - [x] Purge stations that have timed out.
 - [ ] Follow API guidelines
-- [ ] Sync API wrappers (maybe with `flume`?)
-- [ ] Documentation
+- [ ] Sync API wrappers
+- [x] Documentation
 - [x] Handle `MVR_JOIN`
 - [x] Handle `MVR_LEAVE`
-- [ ] Handle `MVR_COMMIT`
+- [x] Handle `MVR_COMMIT`
 - [ ] Handle `MVR_REQUEST`
 - [ ] Handle `MVR_NEW_SESSION_HOST`
 

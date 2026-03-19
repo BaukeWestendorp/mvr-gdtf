@@ -23,24 +23,34 @@ use crate::{
     },
 };
 
+/// The mDNS service type used to register and discover MVR-xchange stations.
 pub const SERVICE_TYPE: &str = "_mvrxchange._tcp.local.";
+
 const REGISTRATION_INTERVAL: Duration = Duration::from_secs(10);
 const STALE_THRESHOLD: Duration = Duration::from_secs(30);
 const PURGE_INTERVAL: Duration = Duration::from_secs(5);
 
+const SUPPORTED_MVR_FILE_VERSION_MAJOR: u32 = 1;
+const SUPPORTED_MVR_FILE_VERSION_MINOR: u32 = 6;
+
 type StationEventHandler = Arc<dyn Fn(StationInfo) + Send + Sync + 'static>;
 
+/// Configuration for a MVR-xchange station.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
+    /// Name of the application or tool.
     pub provider_name: String,
+    /// Group name used in the mDNS service advertisement.
     pub group_name: String,
+    /// Human-readable name for this station.
     pub station_name: String,
+    /// Stable unique identifier for this station. It's recommended to keep this
+    /// the same over multiple runs of the application.
     pub station_uuid: Uuid,
 
-    pub ver_major: u32,
-    pub ver_minor: u32,
-
+    /// Local IP address to bind the TCP listener and advertise over mDNS.
     pub interface_ip: IpAddr,
+    /// TCP port to listen on.
     pub port: u16,
 }
 
@@ -51,9 +61,6 @@ impl Default for Settings {
             group_name: "Default".to_string(),
             station_name: env!("CARGO_PKG_NAME").parse().expect("Should parse provider name"),
             station_uuid: Uuid::new_v4(),
-
-            ver_major: env!("CARGO_PKG_VERSION_MAJOR").parse().expect("Should parse major version"),
-            ver_minor: env!("CARGO_PKG_VERSION_MINOR").parse().expect("Should parse minor version"),
 
             interface_ip: local_ip_address::local_ip().expect("Should get local ip address"),
             port: 48484,
@@ -105,9 +112,11 @@ enum InternalEvent {
     },
 }
 
-/// A cloneable handle to the MVR-xchange station service.
+/// A cloneable handle to a MVR-xchange station service.
 ///
-/// Cheap to clone, every clone communicates with the same background task.
+/// Cheap to clone, as it's just a handle to the running background service.
+/// The task starts on construction and shuts down either when
+/// [`Service::shutdown`] is called or when all handles are dropped.
 #[derive(Clone)]
 pub struct Service {
     station_uuid: Uuid,
@@ -116,6 +125,9 @@ pub struct Service {
 
 impl Service {
     /// Creates a new MVR-xchange station and immediately starts the service.
+    ///
+    /// # Errors
+    /// Returns an error if the TCP listener or mDNS daemon cannot be initialised.
     pub fn new(mut settings: Settings) -> Result<Self, crate::xchange::Error> {
         // Sanitize the station name.
         settings.station_name = settings
@@ -140,30 +152,55 @@ impl Service {
         self.sender.send(cmd).await.map_err(|_| crate::xchange::Error::Shutdown)
     }
 
+    /// Sends `MVR_JOIN` to the station identified by `target_uuid`.
+    ///
+    /// # Errors
+    /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
+    /// [`Error::Shutdown`] if the background task has stopped.
     pub async fn join(&self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Join { target_uuid, resp: tx }).await?;
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
+    /// Sends `MVR_JOIN` to every currently known station.
+    ///
+    /// # Errors
+    /// Per-station errors are logged and skipped; the call only returns
+    /// [`Error::Shutdown`] if the background task has stopped.
     pub async fn join_all(&self) -> Result<(), crate::xchange::Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::JoinAll { resp: tx }).await?;
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
+    /// Sends `MVR_LEAVE` to the station identified by `target_uuid`.
+    ///
+    /// # Errors
+    /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
+    /// [`Error::Shutdown`] if the background task has stopped.
     pub async fn leave(&self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Leave { target_uuid, resp: tx }).await?;
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
+    /// Sends `MVR_LEAVE` to every currently known station.
+    ///
+    /// # Errors
+    /// Per-station errors are logged and skipped; the call only returns
+    /// [`Error::Shutdown`] if the background task has stopped.
     pub async fn leave_all(&self) -> Result<(), crate::xchange::Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::LeaveAll { resp: tx }).await?;
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
+    /// Sends `MVR_COMMIT` for `mvr_file` to the station identified by `target_uuid`.
+    ///
+    /// # Errors
+    /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
+    /// [`Error::Shutdown`] if the background task has stopped.
     pub async fn commit(
         &self,
         target_uuid: Uuid,
@@ -187,6 +224,11 @@ impl Service {
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
+    /// Sends `MVR_COMMIT` for `mvr_file` to every currently known station.
+    ///
+    /// # Errors
+    /// Per-station errors are logged and skipped; the call only returns
+    /// [`Error::Shutdown`] if the background task has stopped.
     pub async fn commit_all(
         &self,
         mvr_file: &MvrFile,
@@ -210,6 +252,12 @@ impl Service {
     }
 
     /// Sets the handler called whenever a station joins the network.
+    ///
+    /// Replaces any previously set handler.
+    ///
+    /// # Errors
+    /// Returns [`Error::Shutdown`] if the
+    /// background task has stopped.
     pub async fn on_join<F>(&self, handler: F) -> Result<(), crate::xchange::Error>
     where
         F: Fn(StationInfo) + Send + Sync + 'static,
@@ -218,6 +266,10 @@ impl Service {
     }
 
     /// Sets the handler called whenever a station leaves the network.
+    ///
+    /// # Errors
+    /// Replaces any previously set handler. Returns [`Error::Shutdown`] if the
+    /// background task has stopped.
     pub async fn on_leave<F>(&self, handler: F) -> Result<(), crate::xchange::Error>
     where
         F: Fn(StationInfo) + Send + Sync + 'static,
@@ -226,6 +278,9 @@ impl Service {
     }
 
     /// Returns a snapshot of all currently known stations.
+    ///
+    /// # Errors
+    /// Returns [`Error::Shutdown`] if the background task has stopped.
     pub async fn stations(&self) -> Result<Vec<StationInfo>, crate::xchange::Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Stations { resp: tx }).await?;
@@ -233,7 +288,10 @@ impl Service {
     }
 
     /// Gracefully shuts down the background task, sending `MVR_LEAVE` to all
-    /// known stations.
+    /// known stations, and waits for it to complete.
+    ///
+    /// Dropping all handles also triggers a shutdown, but without the ability
+    /// to await its completion.
     pub async fn shutdown(&self) {
         let (tx, rx) = oneshot::channel();
         if self.send_cmd(Command::Shutdown { resp: tx }).await.is_ok() {
@@ -387,8 +445,8 @@ impl Inner {
                     provider: self.settings.provider_name.clone(),
                     station_name: self.settings.station_name.clone(),
                     station_uuid: self.settings.station_uuid,
-                    ver_major: self.settings.ver_major,
-                    ver_minor: self.settings.ver_minor,
+                    ver_major: SUPPORTED_MVR_FILE_VERSION_MAJOR,
+                    ver_minor: SUPPORTED_MVR_FILE_VERSION_MINOR,
                     commits: Vec::new(),
                 }
             }
@@ -529,8 +587,8 @@ impl Inner {
                 provider: self.settings.provider_name.clone(),
                 station_name: self.settings.station_name.clone(),
                 station_uuid: self.settings.station_uuid,
-                ver_major: self.settings.ver_major,
-                ver_minor: self.settings.ver_minor,
+                ver_major: SUPPORTED_MVR_FILE_VERSION_MAJOR,
+                ver_minor: SUPPORTED_MVR_FILE_VERSION_MINOR,
                 commits: Vec::new(),
             },
             0,
