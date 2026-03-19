@@ -93,6 +93,14 @@ enum Command {
         commit: Commit,
         resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
     },
+    Request {
+        file_uuid: Option<Uuid>,
+        from_station_uuid: Vec<Uuid>,
+        resp: oneshot::Sender<Result<Option<RequestedFile>, crate::xchange::Error>>,
+    },
+    RequestAll {
+        resp: oneshot::Sender<Result<Vec<RequestedFile>, crate::xchange::Error>>,
+    },
     Stations {
         resp: oneshot::Sender<Vec<StationInfo>>,
     },
@@ -215,6 +223,7 @@ impl Service {
             file_size: mvr_file.file_size(),
             ver_major,
             ver_minor,
+            // FIXME: Properly handle `ForStationUUID`
             for_stations_uuid: Vec::new(),
             file_name: Some(mvr_file.file_name().to_string()),
             comment: comment.map(Into::into),
@@ -233,6 +242,7 @@ impl Service {
         &self,
         mvr_file: &MvrFile,
         comment: Option<impl Into<String>>,
+        // FIXME: Get versions from `MvrFile`.
         ver_major: u32,
         ver_minor: u32,
     ) -> Result<(), crate::xchange::Error> {
@@ -248,6 +258,40 @@ impl Service {
         };
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::CommitAll { commit, resp: tx }).await?;
+        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+    }
+
+    /// Sends `MVR_REQUEST` to request the file with UUID `file_uuid`.
+    ///
+    /// Returns the [`RequestedFile`] containing bytes of the compressed MVR file,
+    /// or [`None`] if no matching file was found on any of the targeted stations.
+    ///
+    /// # Errors
+    /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
+    /// [`Error::Shutdown`] if the background task has stopped.
+    pub async fn request(
+        &self,
+        file_uuid: Option<Uuid>,
+        from_station_uuid: Vec<Uuid>,
+    ) -> Result<Option<RequestedFile>, crate::xchange::Error> {
+        let (tx, rx) = oneshot::channel();
+        self.send_cmd(Command::Request { file_uuid, from_station_uuid, resp: tx }).await?;
+        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+    }
+
+    /// Sends `MVR_REQUEST` to every currently known station to request
+    /// all their MVR files.
+    ///
+    /// Contacts each station in turn and collects their responses.
+    /// Stations that fail or return no file are logged and skipped,
+    /// so the map may contain fewer entries than there are known stations.
+    ///
+    /// # Errors
+    /// Per-station errors are logged and skipped; the call only returns
+    /// [`Error::Shutdown`] if the background task has stopped.
+    pub async fn request_all(&self) -> Result<Vec<RequestedFile>, crate::xchange::Error> {
+        let (tx, rx) = oneshot::channel();
+        self.send_cmd(Command::RequestAll { resp: tx }).await?;
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
@@ -406,6 +450,12 @@ impl Inner {
             }
             Command::CommitAll { commit, resp } => {
                 let _ = resp.send(self.do_commit_all(commit).await);
+            }
+            Command::Request { file_uuid, from_station_uuid, resp } => {
+                let _ = resp.send(self.do_request(file_uuid, from_station_uuid).await);
+            }
+            Command::RequestAll { resp } => {
+                let _ = resp.send(self.do_request_all().await);
             }
             Command::Stations { resp } => {
                 let _ = resp.send(self.stations.values().cloned().collect());
@@ -664,6 +714,62 @@ impl Inner {
         Ok(())
     }
 
+    // FIXME: SPEC: This also triggers a MVR_COMMIT message to other connected stations.
+    async fn do_request(
+        &mut self,
+        file_uuid: Option<Uuid>,
+        from_station_uuid: Vec<Uuid>,
+    ) -> Result<Option<RequestedFile>, crate::xchange::Error> {
+        for &station_uuid in &from_station_uuid {
+            let addr = self.station_addr(station_uuid)?;
+            if let Some(bytes) = send_request(addr, file_uuid, from_station_uuid.clone()).await? {
+                let file_name = self
+                    .stations
+                    .get(&station_uuid)
+                    .and_then(|s| s.commits().iter().find_map(|c| c.file_name.to_owned()))
+                    .unwrap_or(format!("{}.mvr", file_uuid.unwrap_or_default()));
+
+                return Ok(Some(RequestedFile { uuid: station_uuid, file_name, bytes }));
+            }
+        }
+        Ok(None)
+    }
+
+    // FIXME: SPEC: This also triggers a MVR_COMMIT message to other connected stations.
+    async fn do_request_all(&mut self) -> Result<Vec<RequestedFile>, crate::xchange::Error> {
+        let mut files = Vec::new();
+
+        let from_station_uuid = self.stations.keys().cloned().collect::<Vec<_>>();
+
+        for station in self.stations.values() {
+            for commit in station.commits() {
+                match send_request(
+                    station.address,
+                    Some(commit.file_uuid),
+                    from_station_uuid.clone(),
+                )
+                .await
+                {
+                    Ok(Some(bytes)) => {
+                        files.push(RequestedFile {
+                            uuid: commit.file_uuid,
+                            file_name: commit
+                                .file_name
+                                .clone()
+                                .unwrap_or(format!("{}.mvr", commit.file_uuid)),
+                            bytes,
+                        });
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        log::warn!("Failed to send request to station {}: {}", station.uuid(), err);
+                    }
+                }
+            }
+        }
+        Ok(files)
+    }
+
     fn register_station(&mut self, info: StationInfo) {
         let uuid = info.uuid();
         if self.stations.insert(uuid, info.clone()).is_none() {
@@ -750,6 +856,22 @@ async fn send_commit(addr: SocketAddr, commit: Commit) -> Result<(), crate::xcha
     }
 }
 
+async fn send_request(
+    addr: SocketAddr,
+    file_uuid: Option<Uuid>,
+    from_station_uuid: Vec<Uuid>,
+) -> Result<Option<Vec<u8>>, crate::xchange::Error> {
+    let packet = Packet::new(PacketPayload::Request { file_uuid, from_station_uuid }, 0, 1)?;
+    match send_packet_and_recv(addr, packet).await?.payload {
+        PacketPayload::File(bytes) => Ok(Some(bytes)),
+        PacketPayload::RequestRet { ok: true, .. } => Err(crate::xchange::Error::UnexpectedPacket),
+        PacketPayload::RequestRet { ok: false, message, .. } => {
+            Err(crate::xchange::Error::InvalidPacket { message })
+        }
+        _ => Err(crate::xchange::Error::UnexpectedPacket),
+    }
+}
+
 async fn send_packet_and_recv(
     socket_addr: SocketAddr,
     packet: Packet,
@@ -762,3 +884,15 @@ async fn send_packet_and_recv(
     framed.send(packet).await?;
     framed.next().await.ok_or(crate::xchange::Error::ConnectionClosed)?
 }
+
+pub struct RequestedFile {
+    pub uuid: Uuid,
+    pub file_name: String,
+    pub bytes: Vec<u8>,
+}
+
+// TODO: Docs for requested file.
+// TODO: Send `MVR_REQUEST_RET`.
+// TODO: Service should take folder for MVR files
+// TODO: Send MVR_COMMIT to all stations when requested and it's added to folder.
+// TODO: CLI should use single folder.
