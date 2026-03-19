@@ -1,6 +1,6 @@
 # mvr-gdtf
 
-A Rust library for reading [MVR](https://www.gdtf.eu/mvr/prologue/introduction/) and [GDTF](https://www.gdtf.eu/gdtf/prologue/introduction/) files and working with [MVR-xchange]([https:](https://www.gdtf.eu/mvr/mvr-spec/xchange/)) networks.
+A Rust library for reading [MVR](https://www.gdtf.eu/mvr/prologue/introduction/) and [GDTF](https://www.gdtf.eu/gdtf/prologue/introduction/) files and working with [MVR-xchange](https://www.gdtf.eu/mvr/mvr-spec/xchange/) networks.
 
 > ⚠️ **Warning** > This library is in early development. APIs, features, and behavior may change frequently and without notice.
 
