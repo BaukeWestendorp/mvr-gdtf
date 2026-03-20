@@ -121,11 +121,7 @@ enum Command {
 
 /// Events sent internally from inbound TCP connection tasks to the event loop.
 enum InternalEvent {
-    InboundPacket {
-        payload: PacketPayload,
-        addr: SocketAddr,
-        resp: oneshot::Sender<Result<PacketPayload, Error>>,
-    },
+    InboundPacket { payload: PacketPayload, resp: oneshot::Sender<Result<PacketPayload, Error>> },
 }
 
 /// A cloneable handle to a MVR-xchange station service.
@@ -405,8 +401,8 @@ impl Inner {
                 },
 
                 event = internal_rx.recv() => {
-                    if let Some(InternalEvent::InboundPacket { payload, addr, resp }) = event {
-                        let _ = resp.send(self.handle_inbound_packet(payload, addr));
+                    if let Some(InternalEvent::InboundPacket { payload, resp, .. }) = event {
+                        let _ = resp.send(self.handle_inbound_packet(payload));
                     }
                 }
 
@@ -414,7 +410,7 @@ impl Inner {
                     Ok((conn, addr)) => {
                         let task_tx = internal_tx.clone();
                         tokio::spawn(async move {
-                            if let Err(err) = handle_inbound(conn, addr, task_tx).await {
+                            if let Err(err) = handle_inbound(conn, task_tx).await {
                                 log::warn!("Failed to handle inbound connection {addr}: {err}");
                             }
                         });
@@ -493,11 +489,7 @@ impl Inner {
         }
     }
 
-    fn handle_inbound_packet(
-        &mut self,
-        payload: PacketPayload,
-        addr: SocketAddr,
-    ) -> Result<PacketPayload, Error> {
+    fn handle_inbound_packet(&mut self, payload: PacketPayload) -> Result<PacketPayload, Error> {
         let ret = match payload {
             PacketPayload::Join {
                 provider,
@@ -507,15 +499,31 @@ impl Inner {
                 ver_minor,
                 commits,
             } => {
-                self.register_station(StationInfo::new(
-                    station_uuid,
-                    station_name,
-                    addr,
-                    provider,
-                    ver_major,
-                    ver_minor,
-                    commits,
-                ));
+                // `addr` is the TCP peer/source address and its port is typically ephemeral.
+                // We must NOT treat it as the station's listener port (which is discovered via mDNS).
+                if let Some(existing) = self.stations.get_mut(&station_uuid) {
+                    existing.last_seen = Instant::now();
+                    existing.commits = commits;
+                } else if let Some(existing) = self.inactive_stations.get(&station_uuid).cloned() {
+                    // We know the listener address (from mDNS) because it exists in inactive_stations.
+                    // Activate it now: this will emit `on_join`.
+                    self.register_station(StationInfo::new(
+                        station_uuid,
+                        station_name,
+                        existing.address,
+                        provider,
+                        ver_major,
+                        ver_minor,
+                        commits,
+                    ));
+                } else {
+                    // Unknown station and no mDNS address yet: ignore for now.
+                    // We'll activate it when mDNS resolves its service (see handle_resolved_mdns_service).
+                    log::debug!(
+                        "Received JOIN from station {station_uuid} but no mDNS address is known yet; delaying activation"
+                    );
+                }
+
                 PacketPayload::JoinRet {
                     ok: true,
                     message: String::new(),
@@ -614,15 +622,23 @@ impl Inner {
             return;
         }
 
+        // If already known & active, just refresh the timestamp.
         if let Some(station) = self.stations.get_mut(&uuid) {
-            // Already known & active, just refresh the timestamp.
             station.last_seen = Instant::now();
             return;
         }
-        if self.inactive_stations.contains_key(&uuid) {
+
+        // If already known but inactive, don't auto-join.
+        // Still update the stored address so a manual join uses the latest endpoint.
+        if let Some(station) = self.inactive_stations.get_mut(&uuid) {
+            if let Some(addr) = service.get_addresses().iter().next() {
+                station.address = SocketAddr::from((addr.to_ip_addr(), service.get_port()));
+            }
             return;
         }
 
+        // Unknown station: resolve gives us the listener port. Handshake now; on success we
+        // register+emit `on_join`.
         for addr in service.get_addresses() {
             let socket_addr = SocketAddr::from((addr.to_ip_addr(), service.get_port()));
             if let Err(err) = self.do_join_addr(socket_addr).await {
@@ -888,18 +904,14 @@ impl Inner {
     }
 }
 
-async fn handle_inbound(
-    conn: TcpStream,
-    addr: SocketAddr,
-    sender: mpsc::Sender<InternalEvent>,
-) -> Result<(), Error> {
+async fn handle_inbound(conn: TcpStream, sender: mpsc::Sender<InternalEvent>) -> Result<(), Error> {
     let mut framed = Framed::new(conn, PacketCodec);
 
     let packet = framed.next().await.ok_or(Error::ConnectionClosed)??;
 
     let (resp_tx, resp_rx) = oneshot::channel();
     sender
-        .send(InternalEvent::InboundPacket { payload: packet.payload, addr, resp: resp_tx })
+        .send(InternalEvent::InboundPacket { payload: packet.payload, resp: resp_tx })
         .await
         .map_err(|_| Error::Shutdown)?;
 
