@@ -359,6 +359,10 @@ struct Inner {
     settings: Settings,
 
     stations: HashMap<Uuid, StationInfo>,
+    /// An inactive station is a station that has joined before (meaning we know them),
+    /// but then left again. We keep them around to prevent reconnecting to them when
+    /// we resolve mDNS services.
+    inactive_stations: HashMap<Uuid, StationInfo>,
     local_mvr_files: HashMap<Uuid, Arc<MvrFile>>,
 
     on_join: Option<StationEventHandler>,
@@ -370,6 +374,7 @@ impl Inner {
         Self {
             settings,
             stations: HashMap::new(),
+            inactive_stations: HashMap::new(),
             local_mvr_files: HashMap::new(),
 
             on_join: None,
@@ -485,6 +490,7 @@ impl Inner {
                 let _ = resp.send(self.do_request_all().await);
             }
             Command::Stations { resp } => {
+                // Only return active stations.
                 let _ = resp.send(self.stations.values().cloned().collect());
             }
             Command::SetOnJoin(handler) => self.on_join = Some(handler),
@@ -529,6 +535,8 @@ impl Inner {
             }
 
             PacketPayload::Leave { from_station_uuid } => {
+                // The peer explicitly indicated it's leaving *us*.
+                // Mark it as inactive so we keep metadata around but won't treat it as "new" via mDNS.
                 self.unregister_station(&from_station_uuid);
                 PacketPayload::LeaveRet { ok: true, message: String::new() }
             }
@@ -613,8 +621,11 @@ impl Inner {
         }
 
         if let Some(station) = self.stations.get_mut(&uuid) {
-            // Already known, just refresh the timestamp.
+            // Already known & active, just refresh the timestamp.
             station.last_seen = Instant::now();
+            return;
+        }
+        if self.inactive_stations.contains_key(&uuid) {
             return;
         }
 
@@ -852,6 +863,10 @@ impl Inner {
 
     fn register_station(&mut self, info: StationInfo) {
         let uuid = info.uuid();
+
+        // If it existed as inactive, activate it.
+        let _ = self.inactive_stations.remove(&uuid);
+
         if self.stations.insert(uuid, info.clone()).is_none() {
             self.emit_on_join(info);
         }
@@ -860,6 +875,11 @@ impl Inner {
     fn unregister_station(&mut self, uuid: &Uuid) {
         if let Some(info) = self.stations.remove(uuid) {
             log::info!("Station {} ({}) unregistered", info.name(), info.uuid());
+
+            // Keep it around as inactive so mDNS rediscovery won't trigger an immediate re-join,
+            // while preserving station metadata for the user.
+            self.inactive_stations.insert(info.uuid(), info.clone());
+
             self.emit_on_leave(info);
         }
     }
