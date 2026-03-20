@@ -45,9 +45,16 @@ pub enum Error {
     },
 
     /// A station with the given UUID was not found.
-    #[error("Station with uuid {uuid} not found")]
+    #[error("Station with UUID {uuid} not found")]
     StationNotFound {
         /// UUID of the missing station.
+        uuid: Uuid,
+    },
+
+    /// A local MVR file with the given UUID was not found.
+    #[error("A local MVR file with the UUID {uuid} was not found")]
+    LocalMvrFileNotFound {
+        /// The UUID of the MVR file.
         uuid: Uuid,
     },
 }

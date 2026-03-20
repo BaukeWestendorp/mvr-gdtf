@@ -4,10 +4,7 @@ use uuid::Uuid;
 
 use crate::xchange::packet::Commit;
 
-/// Information about a discovered MVR-xchange station.
-///
-/// Instances of this type are produced by the discovery/service layer and expose
-/// identifying information plus the most recently advertised commit metadata.
+/// Information about a MVR-xchange station.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StationInfo {
     uuid: Uuid,
@@ -47,22 +44,22 @@ impl StationInfo {
         self.uuid
     }
 
-    /// Returns the station's human-readable advertised name.
+    /// Returns the station's human-readable name.
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// Returns the provider/application name advertised by the station.
+    /// Returns the provider/application name of the station.
     pub fn provider(&self) -> &str {
         &self.provider
     }
 
-    /// Returns the major MVR file version supported/advertised by the station.
+    /// Returns the major MVR file version supported by the station.
     pub fn ver_major(&self) -> u32 {
         self.ver_major
     }
 
-    /// Returns the minor MVR file version supported/advertised by the station.
+    /// Returns the minor MVR file version supported by the station.
     pub fn ver_minor(&self) -> u32 {
         self.ver_minor
     }

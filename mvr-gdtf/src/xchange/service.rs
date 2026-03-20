@@ -70,6 +70,12 @@ impl Default for Settings {
 
 /// Commands sent from a service handle to the background task.
 enum Command {
+    LoadLocalMvrFile {
+        mvr_file: MvrFile,
+    },
+    GetLocalMvrFiles {
+        resp: oneshot::Sender<Vec<Arc<MvrFile>>>,
+    },
     Join {
         target_uuid: Uuid,
         resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
@@ -86,11 +92,13 @@ enum Command {
     },
     Commit {
         target_uuid: Uuid,
-        commit: Commit,
+        file_uuid: Uuid,
+        comment: Option<String>,
         resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
     },
     CommitAll {
-        commit: Commit,
+        file_uuid: Uuid,
+        comment: Option<String>,
         resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
     },
     Request {
@@ -127,7 +135,6 @@ enum InternalEvent {
 /// [`Service::shutdown`] is called or when all handles are dropped.
 #[derive(Clone)]
 pub struct Service {
-    station_uuid: Uuid,
     sender: mpsc::Sender<Command>,
 }
 
@@ -144,7 +151,6 @@ impl Service {
             .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '-' })
             .collect();
 
-        let station_uuid = settings.station_uuid;
         let (sender, receiver) = mpsc::channel(32);
 
         tokio::spawn(async move {
@@ -153,11 +159,33 @@ impl Service {
             }
         });
 
-        Ok(Self { station_uuid, sender })
+        Ok(Self { sender })
     }
 
     async fn send_cmd(&self, cmd: Command) -> Result<(), crate::xchange::Error> {
         self.sender.send(cmd).await.map_err(|_| crate::xchange::Error::Shutdown)
+    }
+
+    /// Loads the MVR file into the pool, and sends `MVR_COMMIT`
+    /// for `mvr_file` to every currently known station.
+    ///
+    /// # Errors
+    /// Per-station errors are logged and skipped; the call only returns
+    /// [`Error::Shutdown`] if the background task has stopped.
+    pub async fn load_local_mvr_file(
+        &self,
+        mvr_file: MvrFile,
+    ) -> Result<(), crate::xchange::Error> {
+        self.send_cmd(Command::LoadLocalMvrFile { mvr_file }).await
+    }
+
+    /// Returns all locally stored MVR files.
+    /// # Errors
+    /// [`Error::Shutdown`] if the background task has stopped.
+    pub async fn local_mvr_files(&self) -> Result<Vec<Arc<MvrFile>>, crate::xchange::Error> {
+        let (tx, rx) = oneshot::channel();
+        self.send_cmd(Command::GetLocalMvrFiles { resp: tx }).await?;
+        Ok(rx.await.map_err(|_| crate::xchange::Error::Shutdown)?)
     }
 
     /// Sends `MVR_JOIN` to the station identified by `target_uuid`.
@@ -204,7 +232,8 @@ impl Service {
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
-    /// Sends `MVR_COMMIT` for `mvr_file` to the station identified by `target_uuid`.
+    /// Sends `MVR_COMMIT` for the MVR file associated with `file_uuid`
+    /// to the station identified by `target_uuid`.
     ///
     /// # Errors
     /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
@@ -212,52 +241,34 @@ impl Service {
     pub async fn commit(
         &self,
         target_uuid: Uuid,
-        mvr_file: &MvrFile,
-        comment: Option<String>,
-        ver_major: u32,
-        ver_minor: u32,
+        file_uuid: Uuid,
+        comment: Option<impl Into<String>>,
     ) -> Result<(), crate::xchange::Error> {
-        let commit = Commit {
-            file_uuid: mvr_file.file_hash_uuid(),
-            station_uuid: self.station_uuid,
-            file_size: mvr_file.file_size(),
-            ver_major,
-            ver_minor,
-            // FIXME: Properly handle `ForStationUUID`
-            for_stations_uuid: Vec::new(),
-            file_name: Some(mvr_file.file_name().to_string()),
-            comment: comment.map(Into::into),
-        };
         let (tx, rx) = oneshot::channel();
-        self.send_cmd(Command::Commit { target_uuid, commit, resp: tx }).await?;
+        self.send_cmd(Command::Commit {
+            target_uuid,
+            file_uuid,
+            comment: comment.map(Into::into),
+            resp: tx,
+        })
+        .await?;
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
-    /// Sends `MVR_COMMIT` for `mvr_file` to every currently known station.
+    /// Sends `MVR_COMMIT` for the MVR file associated with `file_uuid`
+    /// to every currently known station.
     ///
     /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
     /// [`Error::Shutdown`] if the background task has stopped.
     pub async fn commit_all(
         &self,
-        mvr_file: &MvrFile,
+        file_uuid: Uuid,
         comment: Option<impl Into<String>>,
-        // FIXME: Get versions from `MvrFile`.
-        ver_major: u32,
-        ver_minor: u32,
     ) -> Result<(), crate::xchange::Error> {
-        let commit = Commit {
-            file_uuid: mvr_file.file_hash_uuid(),
-            station_uuid: self.station_uuid,
-            file_size: mvr_file.file_size(),
-            ver_major,
-            ver_minor,
-            for_stations_uuid: Vec::new(),
-            file_name: Some(mvr_file.file_name().to_string()),
-            comment: comment.map(|c| c.into()),
-        };
         let (tx, rx) = oneshot::channel();
-        self.send_cmd(Command::CommitAll { commit, resp: tx }).await?;
+        self.send_cmd(Command::CommitAll { file_uuid, comment: comment.map(Into::into), resp: tx })
+            .await?;
         rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
     }
 
@@ -348,13 +359,22 @@ struct Inner {
     settings: Settings,
 
     stations: HashMap<Uuid, StationInfo>,
+    local_mvr_files: HashMap<Uuid, Arc<MvrFile>>,
+
     on_join: Option<StationEventHandler>,
     on_leave: Option<StationEventHandler>,
 }
 
 impl Inner {
     fn new(settings: Settings) -> Self {
-        Self { settings, stations: HashMap::new(), on_join: None, on_leave: None }
+        Self {
+            settings,
+            stations: HashMap::new(),
+            local_mvr_files: HashMap::new(),
+
+            on_join: None,
+            on_leave: None,
+        }
     }
 
     async fn run(
@@ -433,6 +453,13 @@ impl Inner {
 
     async fn handle_command(&mut self, cmd: Command) {
         match cmd {
+            Command::LoadLocalMvrFile { mvr_file } => {
+                self.local_mvr_files.insert(mvr_file.file_hash_uuid(), Arc::new(mvr_file));
+            }
+            Command::GetLocalMvrFiles { resp } => {
+                let local_mvr_files = self.local_mvr_files.values().cloned().collect();
+                let _ = resp.send(local_mvr_files);
+            }
             Command::Join { target_uuid, resp } => {
                 let _ = resp.send(self.do_join(target_uuid).await);
             }
@@ -445,11 +472,11 @@ impl Inner {
             Command::LeaveAll { resp } => {
                 let _ = resp.send(self.do_leave_all().await);
             }
-            Command::Commit { target_uuid, commit, resp } => {
-                let _ = resp.send(self.do_commit(target_uuid, commit).await);
+            Command::Commit { target_uuid, file_uuid, comment, resp } => {
+                let _ = resp.send(self.do_commit(target_uuid, file_uuid, comment).await);
             }
-            Command::CommitAll { commit, resp } => {
-                let _ = resp.send(self.do_commit_all(commit).await);
+            Command::CommitAll { file_uuid, comment, resp } => {
+                let _ = resp.send(self.do_commit_all(file_uuid, comment).await);
             }
             Command::Request { file_uuid, from_station_uuid, resp } => {
                 let _ = resp.send(self.do_request(file_uuid, from_station_uuid).await);
@@ -497,7 +524,7 @@ impl Inner {
                     station_uuid: self.settings.station_uuid,
                     ver_major: SUPPORTED_MVR_FILE_VERSION_MAJOR,
                     ver_minor: SUPPORTED_MVR_FILE_VERSION_MINOR,
-                    commits: Vec::new(),
+                    commits: self.local_commits(),
                 }
             }
 
@@ -518,16 +545,22 @@ impl Inner {
             } => {
                 if let Some(station) = self.stations.get_mut(&station_uuid) {
                     station.last_seen = Instant::now();
-                    station.commits.push(Commit {
-                        file_uuid,
-                        station_uuid,
-                        file_size,
-                        ver_major,
-                        ver_minor,
-                        for_stations_uuid,
-                        file_name,
-                        comment,
-                    });
+
+                    let targeted_at_us = for_stations_uuid.is_empty()
+                        || for_stations_uuid.contains(&self.settings.station_uuid);
+
+                    if targeted_at_us {
+                        station.commits.push(Commit {
+                            file_uuid,
+                            station_uuid,
+                            file_size,
+                            ver_major,
+                            ver_minor,
+                            for_stations_uuid,
+                            file_name,
+                            comment,
+                        });
+                    }
                 }
                 PacketPayload::CommitRet { ok: true, message: String::new() }
             }
@@ -639,7 +672,7 @@ impl Inner {
                 station_uuid: self.settings.station_uuid,
                 ver_major: SUPPORTED_MVR_FILE_VERSION_MAJOR,
                 ver_minor: SUPPORTED_MVR_FILE_VERSION_MINOR,
-                commits: Vec::new(),
+                commits: self.local_commits(),
             },
             0,
             1,
@@ -696,16 +729,28 @@ impl Inner {
     async fn do_commit(
         &mut self,
         target_uuid: Uuid,
-        commit: Commit,
+        file_uuid: Uuid,
+        comment: Option<String>,
     ) -> Result<(), crate::xchange::Error> {
         let addr = self.station_addr(target_uuid)?;
-        send_commit(addr, commit).await
+        let Some(mut commit) = self.local_commit(&file_uuid) else {
+            return Err(crate::xchange::Error::LocalMvrFileNotFound { uuid: file_uuid })?;
+        };
+        commit.comment = comment;
+        send_commit(addr, commit.clone()).await
     }
 
-    async fn do_commit_all(&mut self, commit: Commit) -> Result<(), crate::xchange::Error> {
+    async fn do_commit_all(
+        &mut self,
+        file_uuid: Uuid,
+        comment: Option<String>,
+    ) -> Result<(), crate::xchange::Error> {
         let stations: Vec<(Uuid, SocketAddr)> =
             self.stations.values().map(|s| (s.uuid(), s.address)).collect();
-
+        let Some(mut commit) = self.local_commit(&file_uuid) else {
+            return Err(crate::xchange::Error::LocalMvrFileNotFound { uuid: file_uuid })?;
+        };
+        commit.comment = comment;
         for (uuid, addr) in stations {
             if let Err(err) = send_commit(addr, commit.clone()).await {
                 log::warn!("Failed to send commit to station {uuid}: {err}");
@@ -766,6 +811,43 @@ impl Inner {
             }
         }
         Ok(files)
+    }
+
+    fn local_commits(&self) -> Vec<Commit> {
+        self.local_mvr_files
+            .values()
+            .map(|mvr_file| {
+                Commit {
+                    file_uuid: mvr_file.file_hash_uuid(),
+                    station_uuid: self.settings.station_uuid,
+                    file_size: mvr_file.file_size(),
+                    ver_major: mvr_file.general_scene_description().ver_major,
+                    ver_minor: mvr_file.general_scene_description().ver_major,
+                    // FIXME: Properly handle `ForStationUUID`. Right now we assume they
+                    // should be sent to all stations in the network.
+                    for_stations_uuid: Vec::new(),
+                    file_name: Some(mvr_file.file_name().to_string()),
+                    // If the commit needs a comment, it should be manually added before sending it.
+                    comment: None,
+                }
+            })
+            .collect()
+    }
+
+    fn local_commit(&self, file_uuid: &Uuid) -> Option<Commit> {
+        self.local_mvr_files.get(file_uuid).map(|mvr_file| Commit {
+            file_uuid: mvr_file.file_hash_uuid(),
+            station_uuid: self.settings.station_uuid,
+            file_size: mvr_file.file_size(),
+            ver_major: mvr_file.general_scene_description().ver_major,
+            ver_minor: mvr_file.general_scene_description().ver_major,
+            // FIXME: Properly handle `ForStationUUID`. Right now we assume they
+            // should be sent to all stations in the network.
+            for_stations_uuid: Vec::new(),
+            file_name: Some(mvr_file.file_name().to_string()),
+            // If the commit needs a comment, it should be manually added before sending it.
+            comment: None,
+        })
     }
 
     fn register_station(&mut self, info: StationInfo) {
