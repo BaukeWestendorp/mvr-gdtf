@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     mvr::MvrFile,
     xchange::{
-        StationInfo,
+        Error, StationInfo,
         packet::{Commit, Packet, PacketCodec, PacketPayload},
     },
 };
@@ -78,36 +78,36 @@ enum Command {
     },
     Join {
         target_uuid: Uuid,
-        resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<(), Error>>,
     },
     JoinAll {
-        resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<(), Error>>,
     },
     Leave {
         target_uuid: Uuid,
-        resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<(), Error>>,
     },
     LeaveAll {
-        resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<(), Error>>,
     },
     Commit {
         target_uuid: Uuid,
         file_uuid: Uuid,
         comment: Option<String>,
-        resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<(), Error>>,
     },
     CommitAll {
         file_uuid: Uuid,
         comment: Option<String>,
-        resp: oneshot::Sender<Result<(), crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<(), Error>>,
     },
     Request {
         file_uuid: Option<Uuid>,
         from_station_uuid: Vec<Uuid>,
-        resp: oneshot::Sender<Result<Option<RequestedFile>, crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<Option<RequestedFile>, Error>>,
     },
     RequestAll {
-        resp: oneshot::Sender<Result<Vec<RequestedFile>, crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<Vec<RequestedFile>, Error>>,
     },
     Stations {
         resp: oneshot::Sender<Vec<StationInfo>>,
@@ -124,7 +124,7 @@ enum InternalEvent {
     InboundPacket {
         payload: PacketPayload,
         addr: SocketAddr,
-        resp: oneshot::Sender<Result<PacketPayload, crate::xchange::Error>>,
+        resp: oneshot::Sender<Result<PacketPayload, Error>>,
     },
 }
 
@@ -143,7 +143,7 @@ impl Service {
     ///
     /// # Errors
     /// Returns an error if the TCP listener or mDNS daemon cannot be initialised.
-    pub fn new(mut settings: Settings) -> Result<Self, crate::xchange::Error> {
+    pub fn new(mut settings: Settings) -> Result<Self, Error> {
         // Sanitize the station name.
         settings.station_name = settings
             .station_name
@@ -162,8 +162,8 @@ impl Service {
         Ok(Self { sender })
     }
 
-    async fn send_cmd(&self, cmd: Command) -> Result<(), crate::xchange::Error> {
-        self.sender.send(cmd).await.map_err(|_| crate::xchange::Error::Shutdown)
+    async fn send_cmd(&self, cmd: Command) -> Result<(), Error> {
+        self.sender.send(cmd).await.map_err(|_| Error::Shutdown)
     }
 
     /// Loads the MVR file into the pool, and sends `MVR_COMMIT`
@@ -172,20 +172,17 @@ impl Service {
     /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn load_local_mvr_file(
-        &self,
-        mvr_file: MvrFile,
-    ) -> Result<(), crate::xchange::Error> {
+    pub async fn load_local_mvr_file(&self, mvr_file: MvrFile) -> Result<(), Error> {
         self.send_cmd(Command::LoadLocalMvrFile { mvr_file }).await
     }
 
     /// Returns all locally stored MVR files.
     /// # Errors
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn local_mvr_files(&self) -> Result<Vec<Arc<MvrFile>>, crate::xchange::Error> {
+    pub async fn local_mvr_files(&self) -> Result<Vec<Arc<MvrFile>>, Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::GetLocalMvrFiles { resp: tx }).await?;
-        Ok(rx.await.map_err(|_| crate::xchange::Error::Shutdown)?)
+        Ok(rx.await.map_err(|_| Error::Shutdown)?)
     }
 
     /// Sends `MVR_JOIN` to the station identified by `target_uuid`.
@@ -193,10 +190,10 @@ impl Service {
     /// # Errors
     /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn join(&self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
+    pub async fn join(&self, target_uuid: Uuid) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Join { target_uuid, resp: tx }).await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sends `MVR_JOIN` to every currently known station.
@@ -204,10 +201,10 @@ impl Service {
     /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn join_all(&self) -> Result<(), crate::xchange::Error> {
+    pub async fn join_all(&self) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::JoinAll { resp: tx }).await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sends `MVR_LEAVE` to the station identified by `target_uuid`.
@@ -215,10 +212,10 @@ impl Service {
     /// # Errors
     /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn leave(&self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
+    pub async fn leave(&self, target_uuid: Uuid) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Leave { target_uuid, resp: tx }).await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sends `MVR_LEAVE` to every currently known station.
@@ -226,10 +223,10 @@ impl Service {
     /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn leave_all(&self) -> Result<(), crate::xchange::Error> {
+    pub async fn leave_all(&self) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::LeaveAll { resp: tx }).await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sends `MVR_COMMIT` for the MVR file associated with `file_uuid`
@@ -243,7 +240,7 @@ impl Service {
         target_uuid: Uuid,
         file_uuid: Uuid,
         comment: Option<impl Into<String>>,
-    ) -> Result<(), crate::xchange::Error> {
+    ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Commit {
             target_uuid,
@@ -252,7 +249,7 @@ impl Service {
             resp: tx,
         })
         .await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sends `MVR_COMMIT` for the MVR file associated with `file_uuid`
@@ -265,11 +262,11 @@ impl Service {
         &self,
         file_uuid: Uuid,
         comment: Option<impl Into<String>>,
-    ) -> Result<(), crate::xchange::Error> {
+    ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::CommitAll { file_uuid, comment: comment.map(Into::into), resp: tx })
             .await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sends `MVR_REQUEST` to request the file with UUID `file_uuid`.
@@ -284,10 +281,10 @@ impl Service {
         &self,
         file_uuid: Option<Uuid>,
         from_station_uuid: Vec<Uuid>,
-    ) -> Result<Option<RequestedFile>, crate::xchange::Error> {
+    ) -> Result<Option<RequestedFile>, Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Request { file_uuid, from_station_uuid, resp: tx }).await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sends `MVR_REQUEST` to every currently known station to request
@@ -300,10 +297,10 @@ impl Service {
     /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn request_all(&self) -> Result<Vec<RequestedFile>, crate::xchange::Error> {
+    pub async fn request_all(&self) -> Result<Vec<RequestedFile>, Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::RequestAll { resp: tx }).await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)?
+        rx.await.map_err(|_| Error::Shutdown)?
     }
 
     /// Sets the handler called whenever a station joins the network.
@@ -313,7 +310,7 @@ impl Service {
     /// # Errors
     /// Returns [`Error::Shutdown`] if the
     /// background task has stopped.
-    pub async fn on_join<F>(&self, handler: F) -> Result<(), crate::xchange::Error>
+    pub async fn on_join<F>(&self, handler: F) -> Result<(), Error>
     where
         F: Fn(StationInfo) + Send + Sync + 'static,
     {
@@ -325,7 +322,7 @@ impl Service {
     /// # Errors
     /// Replaces any previously set handler. Returns [`Error::Shutdown`] if the
     /// background task has stopped.
-    pub async fn on_leave<F>(&self, handler: F) -> Result<(), crate::xchange::Error>
+    pub async fn on_leave<F>(&self, handler: F) -> Result<(), Error>
     where
         F: Fn(StationInfo) + Send + Sync + 'static,
     {
@@ -336,10 +333,10 @@ impl Service {
     ///
     /// # Errors
     /// Returns [`Error::Shutdown`] if the background task has stopped.
-    pub async fn stations(&self) -> Result<Vec<StationInfo>, crate::xchange::Error> {
+    pub async fn stations(&self) -> Result<Vec<StationInfo>, Error> {
         let (tx, rx) = oneshot::channel();
         self.send_cmd(Command::Stations { resp: tx }).await?;
-        rx.await.map_err(|_| crate::xchange::Error::Shutdown)
+        rx.await.map_err(|_| Error::Shutdown)
     }
 
     /// Gracefully shuts down the background task, sending `MVR_LEAVE` to all
@@ -382,10 +379,7 @@ impl Inner {
         }
     }
 
-    async fn run(
-        mut self,
-        mut receiver: mpsc::Receiver<Command>,
-    ) -> Result<(), crate::xchange::Error> {
+    async fn run(mut self, mut receiver: mpsc::Receiver<Command>) -> Result<(), Error> {
         let listener = TcpListener::bind((self.settings.interface_ip, self.settings.port)).await?;
 
         let mdns_daemon = mdns_sd::ServiceDaemon::new()?;
@@ -503,7 +497,7 @@ impl Inner {
         &mut self,
         payload: PacketPayload,
         addr: SocketAddr,
-    ) -> Result<PacketPayload, crate::xchange::Error> {
+    ) -> Result<PacketPayload, Error> {
         let ret = match payload {
             PacketPayload::Join {
                 provider,
@@ -575,7 +569,7 @@ impl Inner {
 
             PacketPayload::Request { .. } => todo!("handle MVR_REQUEST"),
             PacketPayload::NewSessionHost { .. } => todo!("handle MVR_NEW_SESSION_HOST"),
-            _ => return Err(crate::xchange::Error::UnexpectedPacket),
+            _ => return Err(Error::UnexpectedPacket),
         };
 
         Ok(ret)
@@ -651,19 +645,16 @@ impl Inner {
         }
     }
 
-    fn station_addr(&self, uuid: Uuid) -> Result<SocketAddr, crate::xchange::Error> {
-        self.stations
-            .get(&uuid)
-            .map(|info| info.address)
-            .ok_or(crate::xchange::Error::StationNotFound { uuid })
+    fn station_addr(&self, uuid: Uuid) -> Result<SocketAddr, Error> {
+        self.stations.get(&uuid).map(|info| info.address).ok_or(Error::StationNotFound { uuid })
     }
 
-    async fn do_join(&mut self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
+    async fn do_join(&mut self, target_uuid: Uuid) -> Result<(), Error> {
         let addr = self.station_addr(target_uuid)?;
         self.do_join_addr(addr).await
     }
 
-    async fn do_join_all(&mut self) -> Result<(), crate::xchange::Error> {
+    async fn do_join_all(&mut self) -> Result<(), Error> {
         let stations: Vec<(Uuid, String)> =
             self.stations.values().map(|s| (s.uuid(), s.name().to_string())).collect();
 
@@ -675,7 +666,7 @@ impl Inner {
         Ok(())
     }
 
-    async fn do_join_addr(&mut self, addr: SocketAddr) -> Result<(), crate::xchange::Error> {
+    async fn do_join_addr(&mut self, addr: SocketAddr) -> Result<(), Error> {
         let packet = Packet::new(
             PacketPayload::Join {
                 provider: self.settings.provider_name.clone(),
@@ -712,20 +703,20 @@ impl Inner {
                 Ok(())
             }
             PacketPayload::JoinRet { ok: false, message, .. } => {
-                Err(crate::xchange::Error::InvalidPacket { message })
+                Err(Error::InvalidPacket { message })
             }
-            _ => Err(crate::xchange::Error::UnexpectedPacket),
+            _ => Err(Error::UnexpectedPacket),
         }
     }
 
-    async fn do_leave(&mut self, target_uuid: Uuid) -> Result<(), crate::xchange::Error> {
+    async fn do_leave(&mut self, target_uuid: Uuid) -> Result<(), Error> {
         let addr = self.station_addr(target_uuid)?;
         send_leave(addr, self.settings.station_uuid).await?;
         self.unregister_station(&target_uuid);
         Ok(())
     }
 
-    async fn do_leave_all(&mut self) -> Result<(), crate::xchange::Error> {
+    async fn do_leave_all(&mut self) -> Result<(), Error> {
         let stations: Vec<(Uuid, String)> =
             self.stations.values().map(|s| (s.uuid(), s.name().to_string())).collect();
 
@@ -742,10 +733,10 @@ impl Inner {
         target_uuid: Uuid,
         file_uuid: Uuid,
         comment: Option<String>,
-    ) -> Result<(), crate::xchange::Error> {
+    ) -> Result<(), Error> {
         let addr = self.station_addr(target_uuid)?;
         let Some(mut commit) = self.local_commit(&file_uuid) else {
-            return Err(crate::xchange::Error::LocalMvrFileNotFound { uuid: file_uuid })?;
+            return Err(Error::LocalMvrFileNotFound { uuid: file_uuid })?;
         };
         commit.comment = comment;
         send_commit(addr, commit.clone()).await
@@ -755,11 +746,11 @@ impl Inner {
         &mut self,
         file_uuid: Uuid,
         comment: Option<String>,
-    ) -> Result<(), crate::xchange::Error> {
+    ) -> Result<(), Error> {
         let stations: Vec<(Uuid, SocketAddr)> =
             self.stations.values().map(|s| (s.uuid(), s.address)).collect();
         let Some(mut commit) = self.local_commit(&file_uuid) else {
-            return Err(crate::xchange::Error::LocalMvrFileNotFound { uuid: file_uuid })?;
+            return Err(Error::LocalMvrFileNotFound { uuid: file_uuid })?;
         };
         commit.comment = comment;
         for (uuid, addr) in stations {
@@ -774,7 +765,7 @@ impl Inner {
         &mut self,
         file_uuid: Option<Uuid>,
         from_station_uuid: Vec<Uuid>,
-    ) -> Result<Option<RequestedFile>, crate::xchange::Error> {
+    ) -> Result<Option<RequestedFile>, Error> {
         for &station_uuid in &from_station_uuid {
             let addr = self.station_addr(station_uuid)?;
             if let Some(bytes) = send_request(addr, file_uuid, from_station_uuid.clone()).await? {
@@ -790,7 +781,7 @@ impl Inner {
         Ok(None)
     }
 
-    async fn do_request_all(&mut self) -> Result<Vec<RequestedFile>, crate::xchange::Error> {
+    async fn do_request_all(&mut self) -> Result<Vec<RequestedFile>, Error> {
         let mut files = Vec::new();
 
         let from_station_uuid = self.stations.keys().cloned().collect::<Vec<_>>();
@@ -901,38 +892,33 @@ async fn handle_inbound(
     conn: TcpStream,
     addr: SocketAddr,
     sender: mpsc::Sender<InternalEvent>,
-) -> Result<(), crate::xchange::Error> {
+) -> Result<(), Error> {
     let mut framed = Framed::new(conn, PacketCodec);
 
-    let packet = framed.next().await.ok_or(crate::xchange::Error::ConnectionClosed)??;
+    let packet = framed.next().await.ok_or(Error::ConnectionClosed)??;
 
     let (resp_tx, resp_rx) = oneshot::channel();
     sender
         .send(InternalEvent::InboundPacket { payload: packet.payload, addr, resp: resp_tx })
         .await
-        .map_err(|_| crate::xchange::Error::Shutdown)?;
+        .map_err(|_| Error::Shutdown)?;
 
-    let ret_payload = resp_rx.await.map_err(|_| crate::xchange::Error::Shutdown)??;
+    let ret_payload = resp_rx.await.map_err(|_| Error::Shutdown)??;
     framed.send(Packet::new(ret_payload, 0, 1)?).await?;
 
     Ok(())
 }
 
-async fn send_leave(
-    addr: SocketAddr,
-    from_station_uuid: Uuid,
-) -> Result<(), crate::xchange::Error> {
+async fn send_leave(addr: SocketAddr, from_station_uuid: Uuid) -> Result<(), Error> {
     let packet = Packet::new(PacketPayload::Leave { from_station_uuid }, 0, 1)?;
     match send_packet_and_recv(addr, packet).await?.payload {
         PacketPayload::LeaveRet { ok: true, .. } => Ok(()),
-        PacketPayload::LeaveRet { ok: false, message, .. } => {
-            Err(crate::xchange::Error::InvalidPacket { message })
-        }
-        _ => Err(crate::xchange::Error::UnexpectedPacket),
+        PacketPayload::LeaveRet { ok: false, message, .. } => Err(Error::InvalidPacket { message }),
+        _ => Err(Error::UnexpectedPacket),
     }
 }
 
-async fn send_commit(addr: SocketAddr, commit: Commit) -> Result<(), crate::xchange::Error> {
+async fn send_commit(addr: SocketAddr, commit: Commit) -> Result<(), Error> {
     let packet = Packet::new(
         PacketPayload::Commit {
             file_uuid: commit.file_uuid,
@@ -950,9 +936,9 @@ async fn send_commit(addr: SocketAddr, commit: Commit) -> Result<(), crate::xcha
     match send_packet_and_recv(addr, packet).await?.payload {
         PacketPayload::CommitRet { ok: true, .. } => Ok(()),
         PacketPayload::CommitRet { ok: false, message, .. } => {
-            Err(crate::xchange::Error::InvalidPacket { message })
+            Err(Error::InvalidPacket { message })
         }
-        _ => Err(crate::xchange::Error::UnexpectedPacket),
+        _ => Err(Error::UnexpectedPacket),
     }
 }
 
@@ -960,29 +946,26 @@ async fn send_request(
     addr: SocketAddr,
     file_uuid: Option<Uuid>,
     from_station_uuid: Vec<Uuid>,
-) -> Result<Option<Vec<u8>>, crate::xchange::Error> {
+) -> Result<Option<Vec<u8>>, Error> {
     let packet = Packet::new(PacketPayload::Request { file_uuid, from_station_uuid }, 0, 1)?;
     match send_packet_and_recv(addr, packet).await?.payload {
         PacketPayload::File(bytes) => Ok(Some(bytes)),
-        PacketPayload::RequestRet { ok: true, .. } => Err(crate::xchange::Error::UnexpectedPacket),
+        PacketPayload::RequestRet { ok: true, .. } => Err(Error::UnexpectedPacket),
         PacketPayload::RequestRet { ok: false, message, .. } => {
-            Err(crate::xchange::Error::InvalidPacket { message })
+            Err(Error::InvalidPacket { message })
         }
-        _ => Err(crate::xchange::Error::UnexpectedPacket),
+        _ => Err(Error::UnexpectedPacket),
     }
 }
 
-async fn send_packet_and_recv(
-    socket_addr: SocketAddr,
-    packet: Packet,
-) -> Result<Packet, crate::xchange::Error> {
+async fn send_packet_and_recv(socket_addr: SocketAddr, packet: Packet) -> Result<Packet, Error> {
     let stream = time::timeout(Duration::from_secs(1), TcpStream::connect(socket_addr))
         .await
-        .map_err(|_| crate::xchange::Error::Timeout)??;
+        .map_err(|_| Error::Timeout)??;
 
     let mut framed = Framed::new(stream, PacketCodec);
     framed.send(packet).await?;
-    framed.next().await.ok_or(crate::xchange::Error::ConnectionClosed)?
+    framed.next().await.ok_or(Error::ConnectionClosed)?
 }
 
 /// A file that has been requested using `MVR_REQUEST`.

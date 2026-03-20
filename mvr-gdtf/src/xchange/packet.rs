@@ -2,6 +2,8 @@ use bytes::{Buf, BufMut, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
 
+use crate::xchange::Error;
+
 #[derive(Debug, Clone, PartialEq)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct PacketHeader {
@@ -31,9 +33,9 @@ impl PacketHeader {
         buf.put_u64(self.payload_length);
     }
 
-    fn decode_from(buf: &mut impl Buf) -> Result<Self, crate::xchange::Error> {
+    fn decode_from(buf: &mut impl Buf) -> Result<Self, Error> {
         if buf.remaining() < Self::LEN {
-            return Err(crate::xchange::Error::InvalidPacketHeader);
+            return Err(Error::InvalidPacketHeader);
         }
         Ok(Self {
             header: buf.get_u32(),
@@ -184,14 +186,14 @@ impl PacketPayload {
         }
     }
 
-    fn serialize(&self) -> Result<Vec<u8>, crate::xchange::Error> {
+    fn serialize(&self) -> Result<Vec<u8>, Error> {
         match self {
             Self::File(data) => Ok(data.clone()),
             _ => Ok(serde_json::to_vec(self)?),
         }
     }
 
-    fn deserialize(wire_type: u32, bytes: &[u8]) -> Result<Self, crate::xchange::Error> {
+    fn deserialize(wire_type: u32, bytes: &[u8]) -> Result<Self, Error> {
         match wire_type {
             1 => Ok(Self::File(bytes.to_vec())),
             _ => Ok(serde_json::from_slice(bytes)?),
@@ -206,11 +208,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    pub fn new(
-        payload: PacketPayload,
-        number: u32,
-        count: u32,
-    ) -> Result<Self, crate::xchange::Error> {
+    pub fn new(payload: PacketPayload, number: u32, count: u32) -> Result<Self, Error> {
         let bytes = payload.serialize()?;
         let header = PacketHeader::new(bytes.len() as u64, number, count, payload.r#type());
         Ok(Self { header, payload })
@@ -221,7 +219,7 @@ pub struct PacketCodec;
 
 impl Decoder for PacketCodec {
     type Item = Packet;
-    type Error = crate::xchange::Error;
+    type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Packet>, Self::Error> {
         if src.len() < PacketHeader::LEN {
@@ -250,7 +248,7 @@ impl Decoder for PacketCodec {
 }
 
 impl Encoder<Packet> for PacketCodec {
-    type Error = crate::xchange::Error;
+    type Error = Error;
 
     fn encode(&mut self, packet: Packet, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let payload_bytes = packet.payload.serialize()?;
