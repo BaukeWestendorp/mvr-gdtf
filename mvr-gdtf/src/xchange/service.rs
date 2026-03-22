@@ -490,6 +490,7 @@ impl Inner {
     }
 
     fn handle_inbound_packet(&mut self, payload: PacketPayload) -> Result<PacketPayload, Error> {
+        log::trace!("<<< Received inbound packet: {payload:?}");
         let ret = match payload {
             PacketPayload::Join {
                 provider,
@@ -905,9 +906,12 @@ impl Inner {
 }
 
 async fn handle_inbound(conn: TcpStream, sender: mpsc::Sender<InternalEvent>) -> Result<(), Error> {
+    log::trace!("Handling inbound...");
+
     let mut framed = Framed::new(conn, PacketCodec);
 
     let packet = framed.next().await.ok_or(Error::ConnectionClosed)??;
+    log::trace!("<<< Received packet: {:?}", packet.payload);
 
     let (resp_tx, resp_rx) = oneshot::channel();
     sender
@@ -916,6 +920,7 @@ async fn handle_inbound(conn: TcpStream, sender: mpsc::Sender<InternalEvent>) ->
         .map_err(|_| Error::Shutdown)?;
 
     let ret_payload = resp_rx.await.map_err(|_| Error::Shutdown)??;
+    log::trace!(">>> Sending return packet: {:?}", ret_payload);
     framed.send(Packet::new(ret_payload, 0, 1)?).await?;
 
     Ok(())
@@ -976,8 +981,11 @@ async fn send_packet_and_recv(socket_addr: SocketAddr, packet: Packet) -> Result
         .map_err(|_| Error::Timeout)??;
 
     let mut framed = Framed::new(stream, PacketCodec);
+    log::trace!(">>> Sending packet: {:?}", packet.payload);
     framed.send(packet).await?;
-    framed.next().await.ok_or(Error::ConnectionClosed)?
+    let ret_packet = framed.next().await.ok_or(Error::ConnectionClosed)??;
+    log::trace!("<<< Received return packet: {:?}", ret_packet.payload);
+    Ok(ret_packet)
 }
 
 /// A file that has been requested using `MVR_REQUEST`.
