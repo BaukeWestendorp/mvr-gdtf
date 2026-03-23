@@ -1,15 +1,19 @@
 use std::{
     collections::HashMap,
+    io,
     net::{IpAddr, SocketAddr},
+    path::Path,
     sync::Arc,
     time::{Duration, Instant},
 };
 
+use bytes::Bytes;
 use futures_util::{SinkExt as _, StreamExt as _};
 use mdns_sd::{ResolvedService, ServiceEvent, ServiceInfo};
 use tokio::{
+    fs,
     net::{TcpListener, TcpStream},
-    sync::{mpsc, oneshot},
+    sync::{broadcast, mpsc},
     time,
 };
 use tokio_util::codec::Framed;
@@ -33,7 +37,140 @@ const PURGE_INTERVAL: Duration = Duration::from_secs(5);
 const SUPPORTED_MVR_FILE_VERSION_MAJOR: u32 = 1;
 const SUPPORTED_MVR_FILE_VERSION_MINOR: u32 = 6;
 
-type StationEventHandler = Arc<dyn Fn(StationInfo) + Send + Sync + 'static>;
+/// Everything needed to load an MVR file into the station pool.
+#[derive(Debug, Clone)]
+pub struct MvrSource {
+    pub(crate) bytes: Bytes,
+    pub(crate) name: Option<String>,
+}
+
+impl MvrSource {
+    /// Reads the file at `path` asynchronously.
+    ///
+    /// # Errors
+    /// Returns an [`io::Error`] if the file cannot be read.
+    pub async fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
+        let path = path.as_ref();
+        let name = path.file_name().and_then(|n| n.to_str()).map(ToString::to_string);
+        let bytes = fs::read(path).await?.into();
+        Ok(Self { bytes, name })
+    }
+
+    /// Creates a source from raw bytes without an attached name.
+    ///
+    /// Call [`.named()`](MvrSource::named) to attach a name.
+    pub fn from_bytes(bytes: impl Into<Bytes>) -> Self {
+        Self { bytes: bytes.into(), name: None }
+    }
+
+    /// Reads all bytes from `reader` without an attached name.
+    ///
+    /// Call [`.named()`](MvrSource::named) to attach a name.
+    ///
+    /// # Errors
+    /// Returns an [`io::Error`] if reading fails.
+    pub fn from_reader(mut reader: impl io::Read) -> io::Result<Self> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        Ok(Self { bytes: buf.into(), name: None })
+    }
+
+    /// Attaches or replaces the file name, consuming and returning `self`.
+    pub fn named(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+}
+
+impl From<Vec<u8>> for MvrSource {
+    fn from(v: Vec<u8>) -> Self {
+        Self::from_bytes(v)
+    }
+}
+
+impl From<bytes::Bytes> for MvrSource {
+    fn from(b: bytes::Bytes) -> Self {
+        Self::from_bytes(b)
+    }
+}
+
+impl From<&[u8]> for MvrSource {
+    fn from(s: &[u8]) -> Self {
+        Self::from_bytes(Bytes::copy_from_slice(s))
+    }
+}
+
+/// A builder for configuring and starting the MVR-xchange service.
+#[derive(Debug, Clone)]
+pub struct StationBuilder {
+    provider_name: String,
+    station_name: String,
+    group_name: String,
+    station_uuid: Uuid,
+    interface_ip: Option<IpAddr>,
+    port: u16,
+}
+
+impl StationBuilder {
+    /// Create a new builder with required base parameters.
+    pub fn new(provider_name: impl Into<String>, station_name: impl Into<String>) -> Self {
+        Self {
+            provider_name: provider_name.into(),
+            station_name: station_name.into(),
+            group_name: "Default".to_string(),
+            station_uuid: Uuid::new_v4(),
+            interface_ip: None,
+            port: 48484,
+        }
+    }
+
+    /// Set the group name of the service we want to connect to.
+    pub fn group_name(mut self, group: impl Into<String>) -> Self {
+        self.group_name = group.into();
+        self
+    }
+
+    /// Set the UUID for this station.
+    pub fn station_uuid(mut self, uuid: Uuid) -> Self {
+        self.station_uuid = uuid;
+        self
+    }
+
+    /// The IP of the interface we want to listen on.
+    pub fn interface_ip(mut self, ip: IpAddr) -> Self {
+        self.interface_ip = Some(ip);
+        self
+    }
+
+    /// The port we want to listen on.
+    pub fn port(mut self, port: u16) -> Self {
+        self.port = port;
+        self
+    }
+
+    /// Builds the configuration and starts the background service.
+    pub fn start(self) -> Result<Service, Error> {
+        let interface_ip = self
+            .interface_ip
+            .unwrap_or_else(|| local_ip_address::local_ip().expect("Should get local IP"));
+
+        let settings = Settings {
+            provider_name: self.provider_name,
+            group_name: self.group_name,
+            // Sanitize station name
+            station_name: self
+                .station_name
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '-' })
+                .collect(),
+            station_uuid: self.station_uuid,
+            interface_ip,
+            port: self.port,
+        };
+
+        Service::start(settings)
+    }
+}
 
 /// Configuration for a MVR-xchange station.
 #[derive(Debug, Clone, PartialEq)]
@@ -68,117 +205,235 @@ impl Default for Settings {
     }
 }
 
-/// Commands sent from a service handle to the background task.
+/// Events emitted by the MVR-xchange network.
+#[derive(Debug, Clone)]
+pub enum StationEvent {
+    /// Another station joined the network.
+    Joined(StationInfo),
+    /// A station left the network.
+    Left(StationInfo),
+    /// A station committed a new MVR file.
+    Committed {
+        /// The station that committed the file.
+        station: StationInfo,
+        /// The UUID of the file that was committed.
+        file_uuid: Uuid,
+    },
+    /// A station requested one of our MVR files.
+    Requested {
+        /// The station that requested the MVR file.
+        station: StationInfo,
+        /// The UUID of the MVR file the other station requested.
+        /// `None` if it requested the latest MVR file.
+        file_uuid: Option<Uuid>,
+    },
+}
+
 enum Command {
-    LoadLocalMvrFile {
+    LoadParsedMvrFile {
+        source: MvrSource,
         mvr_file: MvrFile,
+        resp: flume::Sender<Result<Uuid, Error>>,
     },
     GetLocalMvrFiles {
-        resp: oneshot::Sender<Vec<Arc<MvrFile>>>,
+        resp: flume::Sender<Vec<Arc<MvrFile>>>,
+    },
+    GetLocalMvrFile {
+        file_uuid: Uuid,
+        resp: flume::Sender<Option<Arc<MvrFile>>>,
+    },
+    UnloadLocalMvrFile {
+        file_uuid: Uuid,
+        resp: flume::Sender<Result<(), Error>>,
     },
     Join {
         target_uuid: Uuid,
-        resp: oneshot::Sender<Result<(), Error>>,
+        resp: flume::Sender<Result<(), Error>>,
     },
     JoinAll {
-        resp: oneshot::Sender<Result<(), Error>>,
+        resp: flume::Sender<Result<(), Error>>,
     },
     Leave {
         target_uuid: Uuid,
-        resp: oneshot::Sender<Result<(), Error>>,
+        resp: flume::Sender<Result<(), Error>>,
     },
     LeaveAll {
-        resp: oneshot::Sender<Result<(), Error>>,
+        resp: flume::Sender<Result<(), Error>>,
     },
     Commit {
         target_uuid: Uuid,
         file_uuid: Uuid,
         comment: Option<String>,
-        resp: oneshot::Sender<Result<(), Error>>,
+        resp: flume::Sender<Result<(), Error>>,
     },
     CommitAll {
         file_uuid: Uuid,
         comment: Option<String>,
-        resp: oneshot::Sender<Result<(), Error>>,
+        resp: flume::Sender<Result<(), Error>>,
     },
     Request {
         file_uuid: Option<Uuid>,
         from_station_uuid: Vec<Uuid>,
-        resp: oneshot::Sender<Result<Option<RequestedFile>, Error>>,
+        resp: flume::Sender<Result<Option<RequestedFile>, Error>>,
     },
     RequestAll {
-        resp: oneshot::Sender<Result<Vec<RequestedFile>, Error>>,
+        resp: flume::Sender<Result<Vec<RequestedFile>, Error>>,
     },
     Stations {
-        resp: oneshot::Sender<Vec<StationInfo>>,
+        resp: flume::Sender<Vec<StationInfo>>,
     },
-    SetOnJoin(StationEventHandler),
-    SetOnLeave(StationEventHandler),
     Shutdown {
-        resp: oneshot::Sender<()>,
+        resp: flume::Sender<()>,
     },
 }
 
-/// Events sent internally from inbound TCP connection tasks to the event loop.
 enum InternalEvent {
-    InboundPacket { payload: PacketPayload, resp: oneshot::Sender<Result<PacketPayload, Error>> },
+    InboundPacket {
+        payload: PacketPayload,
+        resp: flume::Sender<Result<Option<PacketPayload>, Error>>,
+        from_station_uuid: Uuid,
+    },
 }
 
-/// A cloneable handle to a MVR-xchange station service.
-///
-/// Cheap to clone, as it's just a handle to the running background service.
-/// The task starts on construction and shuts down either when
-/// [`Service::shutdown`] is called or when all handles are dropped.
+/// A cloneable handle to a running MVR-xchange station service.
 #[derive(Clone)]
 pub struct Service {
     sender: mpsc::Sender<Command>,
+    event_tx: broadcast::Sender<StationEvent>,
 }
 
 impl Service {
-    /// Creates a new MVR-xchange station and immediately starts the service.
-    ///
-    /// # Errors
-    /// Returns an error if the TCP listener or mDNS daemon cannot be initialised.
-    pub fn new(mut settings: Settings) -> Result<Self, Error> {
-        // Sanitize the station name.
-        settings.station_name = settings
-            .station_name
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '-' })
-            .collect();
-
+    fn start(settings: Settings) -> Result<Self, Error> {
         let (sender, receiver) = mpsc::channel(32);
+        let (event_tx, _) = broadcast::channel(128);
 
-        tokio::spawn(async move {
-            if let Err(err) = Inner::new(settings).run(receiver).await {
-                log::warn!("{err}");
+        tokio::spawn({
+            let event_tx = event_tx.clone();
+            async move {
+                if let Err(err) = Inner::new(settings, event_tx).run(receiver).await {
+                    log::warn!("{err}");
+                }
             }
         });
 
-        Ok(Self { sender })
+        Ok(Self { sender, event_tx })
+    }
+
+    /// Subscribe to network events (joins, leaves, commits, requests).
+    pub fn subscribe(&self) -> broadcast::Receiver<StationEvent> {
+        self.event_tx.subscribe()
     }
 
     async fn send_cmd(&self, cmd: Command) -> Result<(), Error> {
         self.sender.send(cmd).await.map_err(|_| Error::Shutdown)
     }
 
-    /// Loads the MVR file into the pool, and sends `MVR_COMMIT`
-    /// for `mvr_file` to every currently known station.
+    fn blocking_recv<T>(rx: flume::Receiver<T>) -> Result<T, Error> {
+        rx.recv().map_err(|_| Error::Shutdown)
+    }
+
+    fn blocking_recv_result<T>(rx: flume::Receiver<Result<T, Error>>) -> Result<T, Error> {
+        Self::blocking_recv(rx)?
+    }
+
+    fn blocking_send_cmd(&self, cmd: Command) -> Result<(), Error> {
+        self.sender.blocking_send(cmd).map_err(|_| Error::Shutdown)
+    }
+
+    /// Loads an MVR file (parsing is offloaded via `spawn_blocking`) and returns its UUID.
     ///
     /// # Errors
-    /// Per-station errors are logged and skipped; the call only returns
-    /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn load_local_mvr_file(&self, mvr_file: MvrFile) -> Result<(), Error> {
-        self.send_cmd(Command::LoadLocalMvrFile { mvr_file }).await
+    /// Returns [`Error::InvalidMvrFileBytes`] if the bytes are not a valid MVR
+    /// file, [`Error::DuplicateLocalMvrFile`] if a file with the same content
+    /// hash is already in the pool, or [`Error::Shutdown`] if the background
+    /// task has stopped.
+    pub async fn load_mvr_file_async(&self, source: impl Into<MvrSource>) -> Result<Uuid, Error> {
+        let source = source.into();
+        let (tx, rx) = flume::unbounded();
+
+        let source_clone = source.clone();
+        let mvr_file =
+            tokio::task::spawn_blocking(move || MvrFile::load_from_bytes(&source_clone.bytes))
+                .await
+                .map_err(|_| Error::Shutdown)?
+                .map_err(|_| Error::InvalidMvrFileBytes)?;
+
+        self.send_cmd(Command::LoadParsedMvrFile { source, mvr_file, resp: tx }).await?;
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
+    }
+
+    /// Blocking version of [`Service::load_mvr_file_async`].
+    ///
+    /// This must be called from a context where it's OK to block the current
+    /// thread. It does not require an async runtime.
+    pub fn load_mvr_file(&self, source: impl Into<MvrSource>) -> Result<Uuid, Error> {
+        let source = source.into();
+        let (tx, rx) = flume::unbounded();
+
+        let source_clone = source.clone();
+        let mvr_file = MvrFile::load_from_bytes(&source_clone.bytes)
+            .map_err(|_| Error::InvalidMvrFileBytes)?;
+
+        self.blocking_send_cmd(Command::LoadParsedMvrFile { source, mvr_file, resp: tx })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Returns all locally stored MVR files.
+    ///
     /// # Errors
-    /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn local_mvr_files(&self) -> Result<Vec<Arc<MvrFile>>, Error> {
-        let (tx, rx) = oneshot::channel();
+    /// Returns [`Error::Shutdown`] if the background task has stopped.
+    pub async fn local_mvr_files_async(&self) -> Result<Vec<Arc<MvrFile>>, Error> {
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::GetLocalMvrFiles { resp: tx }).await?;
-        Ok(rx.await.map_err(|_| Error::Shutdown)?)
+        Ok(rx.recv_async().await.map_err(|_| Error::Shutdown)?)
+    }
+
+    /// Blocking version of [`Service::local_mvr_files_async`].
+    pub fn local_mvr_files(&self) -> Result<Vec<Arc<MvrFile>>, Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::GetLocalMvrFiles { resp: tx })?;
+        Ok(Self::blocking_recv(rx)?)
+    }
+
+    /// Returns the locally stored MVR file identified by `file_uuid`, or
+    /// `None` if the file was not found.
+    ///
+    /// # Errors
+    /// Returns [`Error::Shutdown`] if the background task has stopped.
+    pub async fn local_mvr_file_async(
+        &self,
+        file_uuid: Uuid,
+    ) -> Result<Option<Arc<MvrFile>>, Error> {
+        let (tx, rx) = flume::unbounded();
+        self.send_cmd(Command::GetLocalMvrFile { file_uuid, resp: tx }).await?;
+        Ok(rx.recv_async().await.map_err(|_| Error::Shutdown)?)
+    }
+
+    /// Blocking version of [`Service::local_mvr_file_async`].
+    pub fn local_mvr_file(&self, file_uuid: Uuid) -> Result<Option<Arc<MvrFile>>, Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::GetLocalMvrFile { file_uuid, resp: tx })?;
+        Ok(Self::blocking_recv(rx)?)
+    }
+
+    /// Removes the locally stored MVR file identified by `file_uuid` from the
+    /// pool. The file will no longer be advertised to peers or returned in
+    /// response to [`Service::request`].
+    ///
+    /// # Errors
+    /// Returns [`Error::LocalMvrFileNotFound`] if the UUID is unknown, or
+    /// [`Error::Shutdown`] if the background task has stopped.
+    pub async fn unload_local_mvr_file_async(&self, file_uuid: Uuid) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.send_cmd(Command::UnloadLocalMvrFile { file_uuid, resp: tx }).await?;
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
+    }
+
+    /// Blocking version of [`Service::unload_local_mvr_file_async`].
+    pub fn unload_local_mvr_file(&self, file_uuid: Uuid) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::UnloadLocalMvrFile { file_uuid, resp: tx })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Sends `MVR_JOIN` to the station identified by `target_uuid`.
@@ -186,21 +441,34 @@ impl Service {
     /// # Errors
     /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn join(&self, target_uuid: Uuid) -> Result<(), Error> {
-        let (tx, rx) = oneshot::channel();
+    pub async fn join_async(&self, target_uuid: Uuid) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::Join { target_uuid, resp: tx }).await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
+    }
+
+    /// Blocking version of [`Service::join_async`].
+    pub fn join(&self, target_uuid: Uuid) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::Join { target_uuid, resp: tx })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Sends `MVR_JOIN` to every currently known station.
     ///
-    /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn join_all(&self) -> Result<(), Error> {
-        let (tx, rx) = oneshot::channel();
+    pub async fn join_all_async(&self) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::JoinAll { resp: tx }).await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
+    }
+
+    /// Blocking version of [`Service::join_all_async`].
+    pub fn join_all(&self) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::JoinAll { resp: tx })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Sends `MVR_LEAVE` to the station identified by `target_uuid`.
@@ -208,36 +476,50 @@ impl Service {
     /// # Errors
     /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn leave(&self, target_uuid: Uuid) -> Result<(), Error> {
-        let (tx, rx) = oneshot::channel();
+    pub async fn leave_async(&self, target_uuid: Uuid) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::Leave { target_uuid, resp: tx }).await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
+    }
+
+    /// Blocking version of [`Service::leave_async`].
+    pub fn leave(&self, target_uuid: Uuid) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::Leave { target_uuid, resp: tx })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Sends `MVR_LEAVE` to every currently known station.
     ///
-    /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn leave_all(&self) -> Result<(), Error> {
-        let (tx, rx) = oneshot::channel();
+    pub async fn leave_all_async(&self) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::LeaveAll { resp: tx }).await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
+    }
+
+    /// Blocking version of [`Service::leave_all_async`].
+    pub fn leave_all(&self) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::LeaveAll { resp: tx })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Sends `MVR_COMMIT` for the MVR file associated with `file_uuid`
     /// to the station identified by `target_uuid`.
     ///
     /// # Errors
-    /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
+    /// Returns [`Error::StationNotFound`] if the station UUID is unknown,
+    /// [`Error::LocalMvrFileNotFound`] if the file UUID is unknown, or
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn commit(
+    pub async fn commit_async(
         &self,
         target_uuid: Uuid,
         file_uuid: Uuid,
         comment: Option<impl Into<String>>,
     ) -> Result<(), Error> {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::Commit {
             target_uuid,
             file_uuid,
@@ -245,105 +527,145 @@ impl Service {
             resp: tx,
         })
         .await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
+    }
+
+    /// Blocking version of [`Service::commit_async`].
+    pub fn commit(
+        &self,
+        target_uuid: Uuid,
+        file_uuid: Uuid,
+        comment: Option<impl Into<String>>,
+    ) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::Commit {
+            target_uuid,
+            file_uuid,
+            comment: comment.map(Into::into),
+            resp: tx,
+        })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Sends `MVR_COMMIT` for the MVR file associated with `file_uuid`
     /// to every currently known station.
     ///
-    /// # Errors
     /// Per-station errors are logged and skipped; the call only returns
+    /// [`Error::LocalMvrFileNotFound`] if the file UUID is unknown, or
     /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn commit_all(
+    pub async fn commit_all_async(
         &self,
         file_uuid: Uuid,
         comment: Option<impl Into<String>>,
     ) -> Result<(), Error> {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::CommitAll { file_uuid, comment: comment.map(Into::into), resp: tx })
             .await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
     }
 
-    /// Sends `MVR_REQUEST` to request the file with UUID `file_uuid`.
+    /// Blocking version of [`Service::commit_all_async`].
+    pub fn commit_all(
+        &self,
+        file_uuid: Uuid,
+        comment: Option<impl Into<String>>,
+    ) -> Result<(), Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::CommitAll {
+            file_uuid,
+            comment: comment.map(Into::into),
+            resp: tx,
+        })?;
+        Self::blocking_recv_result(rx)
+    }
+
+    /// Sends `MVR_REQUEST` to request the file identified by `file_uuid` from
+    /// the given stations.
     ///
-    /// Returns the [`RequestedFile`] containing bytes of the compressed MVR file,
-    /// or [`None`] if no matching file was found on any of the targeted stations.
+    /// Stations are tried in order; the first one that returns a file wins.
+    /// Returns [`None`] if no matching file was found on any of the targeted
+    /// stations.
     ///
     /// # Errors
-    /// Returns [`Error::StationNotFound`] if the UUID is unknown, or
-    /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn request(
+    /// Returns [`Error::StationNotFound`] if any UUID in `from_station_uuid` is
+    /// unknown, or [`Error::Shutdown`] if the background task has stopped.
+    pub async fn request_async(
         &self,
         file_uuid: Option<Uuid>,
         from_station_uuid: Vec<Uuid>,
     ) -> Result<Option<RequestedFile>, Error> {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::Request { file_uuid, from_station_uuid, resp: tx }).await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
     }
 
-    /// Sends `MVR_REQUEST` to every currently known station to request
-    /// all their MVR files.
+    /// Blocking version of [`Service::request_async`].
+    pub fn request(
+        &self,
+        file_uuid: Option<Uuid>,
+        from_station_uuid: Vec<Uuid>,
+    ) -> Result<Option<RequestedFile>, Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::Request { file_uuid, from_station_uuid, resp: tx })?;
+        Self::blocking_recv_result(rx)
+    }
+
+    /// Sends `MVR_REQUEST` to every currently known station and collects all
+    /// returned files.
     ///
-    /// Contacts each station in turn and collects their responses.
-    /// Stations that fail or return no file are logged and skipped,
-    /// so the map may contain fewer entries than there are known stations.
-    ///
-    /// # Errors
-    /// Per-station errors are logged and skipped; the call only returns
-    /// [`Error::Shutdown`] if the background task has stopped.
-    pub async fn request_all(&self) -> Result<Vec<RequestedFile>, Error> {
-        let (tx, rx) = oneshot::channel();
+    /// Stations that fail or return no file are logged and skipped. The call
+    /// only returns [`Error::Shutdown`] if the background task has stopped.
+    pub async fn request_all_async(&self) -> Result<Vec<RequestedFile>, Error> {
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::RequestAll { resp: tx }).await?;
-        rx.await.map_err(|_| Error::Shutdown)?
+        rx.recv_async().await.map_err(|_| Error::Shutdown)?
     }
 
-    /// Sets the handler called whenever a station joins the network.
-    ///
-    /// Replaces any previously set handler.
-    ///
-    /// # Errors
-    /// Returns [`Error::Shutdown`] if the
-    /// background task has stopped.
-    pub async fn on_join<F>(&self, handler: F) -> Result<(), Error>
-    where
-        F: Fn(StationInfo) + Send + Sync + 'static,
-    {
-        self.send_cmd(Command::SetOnJoin(Arc::new(handler))).await
-    }
-
-    /// Sets the handler called whenever a station leaves the network.
-    ///
-    /// # Errors
-    /// Replaces any previously set handler. Returns [`Error::Shutdown`] if the
-    /// background task has stopped.
-    pub async fn on_leave<F>(&self, handler: F) -> Result<(), Error>
-    where
-        F: Fn(StationInfo) + Send + Sync + 'static,
-    {
-        self.send_cmd(Command::SetOnLeave(Arc::new(handler))).await
+    /// Blocking version of [`Service::request_all_async`].
+    pub fn request_all(&self) -> Result<Vec<RequestedFile>, Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::RequestAll { resp: tx })?;
+        Self::blocking_recv_result(rx)
     }
 
     /// Returns a snapshot of all currently known stations.
     ///
     /// # Errors
     /// Returns [`Error::Shutdown`] if the background task has stopped.
-    pub async fn stations(&self) -> Result<Vec<StationInfo>, Error> {
-        let (tx, rx) = oneshot::channel();
+    pub async fn stations_async(&self) -> Result<Vec<StationInfo>, Error> {
+        let (tx, rx) = flume::unbounded();
         self.send_cmd(Command::Stations { resp: tx }).await?;
-        rx.await.map_err(|_| Error::Shutdown)
+        rx.recv_async().await.map_err(|_| Error::Shutdown)
     }
 
-    /// Gracefully shuts down the background task, sending `MVR_LEAVE` to all
-    /// known stations, and waits for it to complete.
+    /// Blocking version of [`Service::stations_async`].
+    pub fn stations(&self) -> Result<Vec<StationInfo>, Error> {
+        let (tx, rx) = flume::unbounded();
+        self.blocking_send_cmd(Command::Stations { resp: tx })?;
+        Ok(Self::blocking_recv(rx)?)
+    }
+
+    /// Gracefully shuts down the background task.
     ///
-    /// Dropping all handles also triggers a shutdown, but without the ability
-    /// to await its completion.
-    pub async fn shutdown(&self) {
-        let (tx, rx) = oneshot::channel();
+    /// Sends `MVR_LEAVE` to all known stations, then waits for the task to
+    /// finish. Dropping all [`Service`] handles also triggers a shutdown, but
+    /// without the ability to await its completion.
+    pub async fn shutdown_async(&self) {
+        let (tx, rx) = flume::unbounded();
         if self.send_cmd(Command::Shutdown { resp: tx }).await.is_ok() {
-            let _ = rx.await;
+            let _ = rx.recv_async().await;
+        }
+    }
+
+    /// Blocking version of [`Service::shutdown_async`].
+    ///
+    /// Sends `MVR_LEAVE` to all known stations, then waits for the task to
+    /// finish. Dropping all [`Service`] handles also triggers a shutdown, but
+    /// without the ability to wait for its completion.
+    pub fn shutdown(&self) {
+        let (tx, rx) = flume::unbounded();
+        if self.blocking_send_cmd(Command::Shutdown { resp: tx }).is_ok() {
+            let _ = rx.recv();
         }
     }
 }
@@ -356,22 +678,29 @@ struct Inner {
     /// but then left again. We keep them around to prevent reconnecting to them when
     /// we resolve mDNS services.
     inactive_stations: HashMap<Uuid, StationInfo>,
-    local_mvr_files: HashMap<Uuid, Arc<MvrFile>>,
+    local_mvr_files: HashMap<Uuid, LocalMvrFile>,
+    latest_local_mvr_file: Option<Uuid>,
 
-    on_join: Option<StationEventHandler>,
-    on_leave: Option<StationEventHandler>,
+    event_tx: broadcast::Sender<StationEvent>,
 }
 
 impl Inner {
-    fn new(settings: Settings) -> Self {
+    fn new(settings: Settings, event_tx: broadcast::Sender<StationEvent>) -> Self {
+        // Sanitize station name
+        let mut settings = settings;
+        settings.station_name = settings
+            .station_name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '-' { c } else { '-' })
+            .collect();
+
         Self {
             settings,
             stations: HashMap::new(),
             inactive_stations: HashMap::new(),
             local_mvr_files: HashMap::new(),
-
-            on_join: None,
-            on_leave: None,
+            latest_local_mvr_file: None,
+            event_tx,
         }
     }
 
@@ -401,8 +730,8 @@ impl Inner {
                 },
 
                 event = internal_rx.recv() => {
-                    if let Some(InternalEvent::InboundPacket { payload, resp, .. }) = event {
-                        let _ = resp.send(self.handle_inbound_packet(payload));
+                    if let Some(InternalEvent::InboundPacket { payload, resp, from_station_uuid }) = event {
+                        let _ = resp.send(self.handle_inbound_packet(payload, from_station_uuid));
                     }
                 }
 
@@ -410,7 +739,7 @@ impl Inner {
                     Ok((conn, addr)) => {
                         let task_tx = internal_tx.clone();
                         tokio::spawn(async move {
-                            if let Err(err) = handle_inbound(conn, task_tx).await {
+                            if let Err(err) = handle_inbound(conn, addr, task_tx).await {
                                 log::warn!("Failed to handle inbound connection {addr}: {err}");
                             }
                         });
@@ -448,12 +777,44 @@ impl Inner {
 
     async fn handle_command(&mut self, cmd: Command) {
         match cmd {
-            Command::LoadLocalMvrFile { mvr_file } => {
-                self.local_mvr_files.insert(mvr_file.file_hash_uuid(), Arc::new(mvr_file));
+            Command::LoadParsedMvrFile { source, mvr_file, resp } => {
+                let uuid = mvr_file.file_hash_uuid();
+
+                if self.local_mvr_files.contains_key(&uuid) {
+                    let _ = resp.send(Err(Error::DuplicateLocalMvrFile { uuid }));
+                    return;
+                }
+
+                self.latest_local_mvr_file = Some(uuid);
+                self.local_mvr_files.insert(
+                    uuid,
+                    LocalMvrFile {
+                        mvr_file: Arc::new(mvr_file),
+                        bytes: source.bytes,
+                        name: source.name,
+                    },
+                );
+
+                let _ = resp.send(Ok(uuid));
             }
             Command::GetLocalMvrFiles { resp } => {
-                let local_mvr_files = self.local_mvr_files.values().cloned().collect();
-                let _ = resp.send(local_mvr_files);
+                let files =
+                    self.local_mvr_files.values().map(|f| Arc::clone(&f.mvr_file)).collect();
+                let _ = resp.send(files);
+            }
+            Command::GetLocalMvrFile { file_uuid, resp } => {
+                let file = self.local_mvr_files.get(&file_uuid).map(|f| Arc::clone(&f.mvr_file));
+                let _ = resp.send(file);
+            }
+            Command::UnloadLocalMvrFile { file_uuid, resp } => {
+                if self.local_mvr_files.remove(&file_uuid).is_some() {
+                    if self.latest_local_mvr_file == Some(file_uuid) {
+                        self.latest_local_mvr_file = self.local_mvr_files.keys().next().copied();
+                    }
+                    let _ = resp.send(Ok(()));
+                } else {
+                    let _ = resp.send(Err(Error::LocalMvrFileNotFound { uuid: file_uuid }));
+                }
             }
             Command::Join { target_uuid, resp } => {
                 let _ = resp.send(self.do_join(target_uuid).await);
@@ -483,14 +844,15 @@ impl Inner {
                 // Only return active stations.
                 let _ = resp.send(self.stations.values().cloned().collect());
             }
-            Command::SetOnJoin(handler) => self.on_join = Some(handler),
-            Command::SetOnLeave(handler) => self.on_leave = Some(handler),
             Command::Shutdown { .. } => unreachable!("Shutdown is handled in run()"),
         }
     }
 
-    fn handle_inbound_packet(&mut self, payload: PacketPayload) -> Result<PacketPayload, Error> {
-        log::trace!("<<< Received inbound packet: {payload:?}");
+    fn handle_inbound_packet(
+        &mut self,
+        payload: PacketPayload,
+        from_station_uuid: Uuid,
+    ) -> Result<Option<PacketPayload>, Error> {
         let ret = match payload {
             PacketPayload::Join {
                 provider,
@@ -573,15 +935,53 @@ impl Inner {
                         });
                     }
                 }
+
+                if let Some(station) = self.stations.get(&station_uuid) {
+                    let _ = self
+                        .event_tx
+                        .send(StationEvent::Committed { station: station.clone(), file_uuid });
+                }
+
                 PacketPayload::CommitRet { ok: true, message: String::new() }
             }
 
-            PacketPayload::Request { .. } => todo!("handle MVR_REQUEST"),
+            PacketPayload::Request { file_uuid, from_station_uuid: station_filter } => {
+                if !station_filter.is_empty()
+                    && !station_filter.contains(&self.settings.station_uuid)
+                {
+                    return Ok(None);
+                }
+
+                let local_mvr_file = match file_uuid {
+                    Some(file_uuid) => self.local_mvr_files.get(&file_uuid),
+                    None => self
+                        .latest_local_mvr_file
+                        .as_ref()
+                        .and_then(|uuid| self.local_mvr_files.get(uuid)),
+                };
+
+                match local_mvr_file {
+                    Some(f) => {
+                        if let Some(station) = self.stations.get(&from_station_uuid) {
+                            let _ = self.event_tx.send(StationEvent::Requested {
+                                station: station.clone(),
+                                file_uuid,
+                            });
+                        }
+
+                        PacketPayload::File(Bytes::clone(&f.bytes))
+                    }
+                    None => PacketPayload::RequestRet {
+                        ok: false,
+                        message: "The MVR is not available on this client".to_string(),
+                    },
+                }
+            }
             PacketPayload::NewSessionHost { .. } => todo!("handle MVR_NEW_SESSION_HOST"),
             _ => return Err(Error::UnexpectedPacket),
         };
 
-        Ok(ret)
+        Ok(Some(ret))
     }
 
     async fn register_mdns_service(&self, mdns_daemon: &mdns_sd::ServiceDaemon) {
@@ -753,10 +1153,10 @@ impl Inner {
     ) -> Result<(), Error> {
         let addr = self.station_addr(target_uuid)?;
         let Some(mut commit) = self.local_commit(&file_uuid) else {
-            return Err(Error::LocalMvrFileNotFound { uuid: file_uuid })?;
+            return Err(Error::LocalMvrFileNotFound { uuid: file_uuid });
         };
         commit.comment = comment;
-        send_commit(addr, commit.clone()).await
+        send_commit(addr, commit).await
     }
 
     async fn do_commit_all(
@@ -767,7 +1167,7 @@ impl Inner {
         let stations: Vec<(Uuid, SocketAddr)> =
             self.stations.values().map(|s| (s.uuid(), s.address)).collect();
         let Some(mut commit) = self.local_commit(&file_uuid) else {
-            return Err(Error::LocalMvrFileNotFound { uuid: file_uuid })?;
+            return Err(Error::LocalMvrFileNotFound { uuid: file_uuid });
         };
         commit.comment = comment;
         for (uuid, addr) in stations {
@@ -786,13 +1186,13 @@ impl Inner {
         for &station_uuid in &from_station_uuid {
             let addr = self.station_addr(station_uuid)?;
             if let Some(bytes) = send_request(addr, file_uuid, from_station_uuid.clone()).await? {
-                let file_name = self
+                let name = self
                     .stations
                     .get(&station_uuid)
-                    .and_then(|s| s.commits().iter().find_map(|c| c.file_name.to_owned()))
-                    .unwrap_or(format!("{}.mvr", file_uuid.unwrap_or_default()));
+                    .and_then(|s| s.commits().iter().find_map(|c| c.file_name.clone()))
+                    .unwrap_or_else(|| format!("{}.mvr", file_uuid.unwrap_or_default()));
 
-                return Ok(Some(RequestedFile { uuid: station_uuid, name: file_name, bytes }));
+                return Ok(Some(RequestedFile { uuid: station_uuid, name, bytes: bytes.into() }));
             }
         }
         Ok(None)
@@ -800,7 +1200,6 @@ impl Inner {
 
     async fn do_request_all(&mut self) -> Result<Vec<RequestedFile>, Error> {
         let mut files = Vec::new();
-
         let from_station_uuid = self.stations.keys().cloned().collect::<Vec<_>>();
 
         for station in self.stations.values() {
@@ -818,8 +1217,8 @@ impl Inner {
                             name: commit
                                 .file_name
                                 .clone()
-                                .unwrap_or(format!("{}.mvr", commit.file_uuid)),
-                            bytes,
+                                .unwrap_or_else(|| format!("{}.mvr", commit.file_uuid)),
+                            bytes: bytes.into(),
                         });
                     }
                     Ok(None) => {}
@@ -835,17 +1234,18 @@ impl Inner {
     fn local_commits(&self) -> Vec<Commit> {
         self.local_mvr_files
             .values()
-            .map(|mvr_file| {
+            .map(|f| {
+                let mvr = &f.mvr_file;
                 Commit {
-                    file_uuid: mvr_file.file_hash_uuid(),
+                    file_uuid: mvr.file_hash_uuid(),
                     station_uuid: self.settings.station_uuid,
-                    file_size: mvr_file.file_size(),
-                    ver_major: mvr_file.general_scene_description().ver_major,
-                    ver_minor: mvr_file.general_scene_description().ver_major,
+                    file_size: f.bytes.len() as u64,
+                    ver_major: mvr.general_scene_description().ver_major,
+                    ver_minor: mvr.general_scene_description().ver_minor,
                     // FIXME: Properly handle `ForStationUUID`. Right now we assume they
                     // should be sent to all stations in the network.
                     for_stations_uuid: Vec::new(),
-                    file_name: Some(mvr_file.file_name().to_string()),
+                    file_name: f.name.clone(),
                     // If the commit needs a comment, it should be manually added before sending it.
                     comment: None,
                 }
@@ -854,18 +1254,21 @@ impl Inner {
     }
 
     fn local_commit(&self, file_uuid: &Uuid) -> Option<Commit> {
-        self.local_mvr_files.get(file_uuid).map(|mvr_file| Commit {
-            file_uuid: mvr_file.file_hash_uuid(),
-            station_uuid: self.settings.station_uuid,
-            file_size: mvr_file.file_size(),
-            ver_major: mvr_file.general_scene_description().ver_major,
-            ver_minor: mvr_file.general_scene_description().ver_major,
-            // FIXME: Properly handle `ForStationUUID`. Right now we assume they
-            // should be sent to all stations in the network.
-            for_stations_uuid: Vec::new(),
-            file_name: Some(mvr_file.file_name().to_string()),
-            // If the commit needs a comment, it should be manually added before sending it.
-            comment: None,
+        self.local_mvr_files.get(file_uuid).map(|f| {
+            let mvr = &f.mvr_file;
+            Commit {
+                file_uuid: mvr.file_hash_uuid(),
+                station_uuid: self.settings.station_uuid,
+                file_size: f.bytes.len() as u64,
+                ver_major: mvr.general_scene_description().ver_major,
+                ver_minor: mvr.general_scene_description().ver_minor,
+                // FIXME: Properly handle `ForStationUUID`. Right now we assume they
+                // should be sent to all stations in the network.
+                for_stations_uuid: Vec::new(),
+                file_name: f.name.clone(),
+                // If the commit needs a comment, it should be manually added before sending it.
+                comment: None,
+            }
         })
     }
 
@@ -874,54 +1277,55 @@ impl Inner {
 
         // If it existed as inactive, activate it.
         let _ = self.inactive_stations.remove(&uuid);
-
         if self.stations.insert(uuid, info.clone()).is_none() {
-            self.emit_on_join(info);
+            let _ = self.event_tx.send(StationEvent::Joined(info));
         }
     }
 
     fn unregister_station(&mut self, uuid: &Uuid) {
         if let Some(info) = self.stations.remove(uuid) {
             log::info!("Station {} ({}) unregistered", info.name(), info.uuid());
-
-            // Keep it around as inactive so mDNS rediscovery won't trigger an immediate re-join,
-            // while preserving station metadata for the user.
             self.inactive_stations.insert(info.uuid(), info.clone());
-
-            self.emit_on_leave(info);
-        }
-    }
-
-    fn emit_on_join(&self, info: StationInfo) {
-        if let Some(handler) = &self.on_join {
-            handler(info);
-        }
-    }
-
-    fn emit_on_leave(&self, info: StationInfo) {
-        if let Some(handler) = &self.on_leave {
-            handler(info);
+            let _ = self.event_tx.send(StationEvent::Left(info));
         }
     }
 }
 
-async fn handle_inbound(conn: TcpStream, sender: mpsc::Sender<InternalEvent>) -> Result<(), Error> {
-    log::trace!("Handling inbound...");
-
+async fn handle_inbound(
+    conn: TcpStream,
+    peer_addr: SocketAddr,
+    sender: mpsc::Sender<InternalEvent>,
+) -> Result<(), Error> {
     let mut framed = Framed::new(conn, PacketCodec);
 
     let packet = framed.next().await.ok_or(Error::ConnectionClosed)??;
-    log::trace!("<<< Received packet: {:?}", packet.payload);
 
-    let (resp_tx, resp_rx) = oneshot::channel();
+    // Derive the station UUID from the packet payload instead of trying to map by peer socket.
+    // If we cannot derive it, fall back to Nil (still lets us respond to requests).
+    let derived_station_uuid = match &packet.payload {
+        PacketPayload::Join { station_uuid, .. } => *station_uuid,
+        PacketPayload::Leave { from_station_uuid } => *from_station_uuid,
+        PacketPayload::Commit { station_uuid, .. } => *station_uuid,
+        // For REQUEST, the payload does not include a single sender UUID. We'll log it and
+        // continue with nil;
+        PacketPayload::Request { .. } => Uuid::nil(),
+        _ => Uuid::nil(),
+    };
+
+    let (resp_tx, resp_rx) = flume::unbounded();
     sender
-        .send(InternalEvent::InboundPacket { payload: packet.payload, resp: resp_tx })
+        .send(InternalEvent::InboundPacket {
+            payload: packet.payload,
+            resp: resp_tx,
+            from_station_uuid: derived_station_uuid,
+        })
         .await
         .map_err(|_| Error::Shutdown)?;
 
-    let ret_payload = resp_rx.await.map_err(|_| Error::Shutdown)??;
-    log::trace!(">>> Sending return packet: {:?}", ret_payload);
-    framed.send(Packet::new(ret_payload, 0, 1)?).await?;
+    if let Some(ret_payload) = resp_rx.recv_async().await.map_err(|_| Error::Shutdown)?? {
+        log::trace!(">>> Sending return packet to peer_addr={peer_addr}: {:?}", ret_payload);
+        framed.send(Packet::new(ret_payload, 0, 1)?).await?;
+    }
 
     Ok(())
 }
@@ -963,7 +1367,7 @@ async fn send_request(
     addr: SocketAddr,
     file_uuid: Option<Uuid>,
     from_station_uuid: Vec<Uuid>,
-) -> Result<Option<Vec<u8>>, Error> {
+) -> Result<Option<Bytes>, Error> {
     let packet = Packet::new(PacketPayload::Request { file_uuid, from_station_uuid }, 0, 1)?;
     match send_packet_and_recv(addr, packet).await?.payload {
         PacketPayload::File(bytes) => Ok(Some(bytes)),
@@ -988,26 +1392,35 @@ async fn send_packet_and_recv(socket_addr: SocketAddr, packet: Packet) -> Result
     Ok(ret_packet)
 }
 
-/// A file that has been requested using `MVR_REQUEST`.
+/// A file received in response to an `MVR_REQUEST`.
 pub struct RequestedFile {
     uuid: Uuid,
     name: String,
-    bytes: Vec<u8>,
+    bytes: Bytes,
 }
 
 impl RequestedFile {
-    /// The file's UUID.
+    /// The UUID identifying this file (either the requested file UUID, or the
+    /// UUID of the station that provided it when no specific file was
+    /// requested).
     pub fn uuid(&self) -> Uuid {
         self.uuid
     }
 
-    /// The file's name.
+    /// The file name, derived from the remote station's commit metadata.
+    /// Falls back to `"<uuid>.mvr"` if no name was advertised.
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// The raw bytes of the compressed file.
-    pub fn bytes(&self) -> &[u8] {
+    /// The raw bytes of the compressed MVR file.
+    pub fn bytes(&self) -> &Bytes {
         &self.bytes
     }
+}
+
+struct LocalMvrFile {
+    mvr_file: Arc<MvrFile>,
+    bytes: bytes::Bytes,
+    name: Option<String>,
 }

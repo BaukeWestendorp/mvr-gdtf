@@ -1,4 +1,6 @@
-use bytes::{Buf, BufMut, BytesMut};
+use std::fmt;
+
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
 
@@ -175,7 +177,7 @@ pub enum PacketPayload {
         message: String,
     },
     #[serde(skip)]
-    File(Vec<u8>),
+    File(Bytes),
 }
 
 impl PacketPayload {
@@ -186,16 +188,16 @@ impl PacketPayload {
         }
     }
 
-    fn serialize(&self) -> Result<Vec<u8>, Error> {
+    fn serialize(&self) -> Result<Bytes, Error> {
         match self {
-            Self::File(data) => Ok(data.clone()),
-            _ => Ok(serde_json::to_vec(self)?),
+            Self::File(data) => Ok(Bytes::clone(&data)),
+            _ => Ok(Bytes::from(serde_json::to_vec(self)?)),
         }
     }
 
-    fn deserialize(wire_type: u32, bytes: &[u8]) -> Result<Self, Error> {
-        match wire_type {
-            1 => Ok(Self::File(bytes.to_vec())),
+    fn deserialize(r#type: u32, bytes: &[u8]) -> Result<Self, Error> {
+        match r#type {
+            1 => Ok(Self::File(Bytes::from(bytes.to_vec()))),
             _ => Ok(serde_json::from_slice(bytes)?),
         }
     }

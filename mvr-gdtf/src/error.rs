@@ -1,4 +1,4 @@
-use std::{io, path::PathBuf};
+use std::io;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -13,14 +13,14 @@ pub enum Error {
     Mvr(#[from] crate::mvr::Error),
 
     #[error(
-        "Could not open the archive at: '{path}': {source}. Please check if the file exists and you have permission to access it."
+        "Could not open the archive: {source}. Please check if the file exists and you have permission to access it."
     )]
-    OpenArchive { path: PathBuf, source: io::Error },
+    OpenArchive { source: io::Error },
 
     #[error(
-        "Could not unzip the archive at: '{path}': {source}. The file may be corrupted or not a valid archive."
+        "Could not unzip the archive: {source}. The file may be corrupted or not a valid archive."
     )]
-    UnzipArchive { path: PathBuf, source: zip::result::ZipError },
+    UnzipArchive { source: zip::result::ZipError },
 
     #[error("CIE color parse X error: '{misformatted_string}'")]
     CieColorParseXError { misformatted_string: String },

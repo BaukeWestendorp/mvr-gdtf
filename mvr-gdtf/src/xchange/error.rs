@@ -57,4 +57,14 @@ pub enum Error {
         /// The UUID of the MVR file.
         uuid: Uuid,
     },
+    /// A local MVR file with the given UUID already exists.
+    #[error("A local MVR file with the UUID {uuid} already exists")]
+    DuplicateLocalMvrFile {
+        /// The UUID of the MVR file.
+        uuid: Uuid,
+    },
+
+    /// Could not generate MVR file from bytes.
+    #[error("Could not generate MVR file from bytes")]
+    InvalidMvrFileBytes,
 }
