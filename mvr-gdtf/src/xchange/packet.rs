@@ -1,5 +1,3 @@
-use std::fmt;
-
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;

@@ -1,10 +1,9 @@
 use std::{
     fs,
     io::{self, Read as _},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
-use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::{Resource, load_zip};
@@ -21,7 +20,7 @@ pub struct GdtfFile {
     description: GdtfDescription,
     resources: Vec<Resource>,
 
-    file_hash_uuid: Uuid,
+    file_path: Option<PathBuf>,
 }
 
 impl GdtfFile {
@@ -29,19 +28,22 @@ impl GdtfFile {
         let path = path.as_ref();
 
         let archive = fs::File::open(path).map_err(|e| crate::Error::OpenArchive { source: e })?;
-        let (file_hash_uuid, mut zip) = load_zip(archive)?;
+        let (_, mut zip) = load_zip(archive)?;
 
         let description = load_description(&mut zip)?;
 
-        Ok(Self { description, resources: Vec::new(), file_hash_uuid })
+        Ok(Self { description, resources: Vec::new(), file_path: Some(path.to_path_buf()) })
     }
 
-    pub fn load_from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
-        let (file_hash_uuid, mut zip) = load_zip(io::Cursor::new(bytes))?;
+    pub fn load_from_bytes(
+        bytes: &[u8],
+        file_path: Option<impl Into<PathBuf>>,
+    ) -> Result<Self, crate::Error> {
+        let (_, mut zip) = load_zip(io::Cursor::new(bytes))?;
 
         let description = load_description(&mut zip)?;
 
-        Ok(Self { description, resources: Vec::new(), file_hash_uuid })
+        Ok(Self { description, resources: Vec::new(), file_path: file_path.map(Into::into) })
     }
 
     pub fn description(&self) -> &GdtfDescription {
@@ -52,8 +54,8 @@ impl GdtfFile {
         &self.resources
     }
 
-    pub fn file_hash_uuid(&self) -> Uuid {
-        self.file_hash_uuid
+    pub fn file_path(&self) -> Option<&Path> {
+        self.file_path.as_deref()
     }
 }
 

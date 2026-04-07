@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{self, Read as _},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use uuid::Uuid;
@@ -22,6 +22,7 @@ pub struct MvrFile {
     gdtf_files: Vec<GdtfFile>,
     resources: Vec<Resource>,
 
+    file_path: Option<PathBuf>,
     file_hash_uuid: Uuid,
 }
 
@@ -38,11 +39,15 @@ impl MvrFile {
             general_scene_description,
             gdtf_files: Vec::new(),
             resources: Vec::new(),
+            file_path: Some(path.to_path_buf()),
             file_hash_uuid,
         })
     }
 
-    pub fn load_from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
+    pub fn load_from_bytes(
+        bytes: &[u8],
+        file_path: Option<impl Into<PathBuf>>,
+    ) -> Result<Self, crate::Error> {
         let (file_hash_uuid, mut zip) = load_zip(io::Cursor::new(bytes))?;
 
         let general_scene_description = load_general_scene_description(&mut zip)?;
@@ -51,6 +56,7 @@ impl MvrFile {
             general_scene_description,
             gdtf_files: Vec::new(),
             resources: Vec::new(),
+            file_path: file_path.map(Into::into),
             file_hash_uuid,
         })
     }
@@ -65,6 +71,10 @@ impl MvrFile {
 
     pub fn resources(&self) -> &[Resource] {
         &self.resources
+    }
+
+    pub fn file_path(&self) -> Option<&Path> {
+        self.file_path.as_deref()
     }
 
     pub fn file_hash_uuid(&self) -> Uuid {
