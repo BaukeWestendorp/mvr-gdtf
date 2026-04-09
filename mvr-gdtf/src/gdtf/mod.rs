@@ -35,15 +35,12 @@ impl GdtfFile {
         Ok(Self { description, resources: Vec::new(), file_path: Some(path.to_path_buf()) })
     }
 
-    pub fn load_from_bytes(
-        bytes: &[u8],
-        file_path: Option<impl Into<PathBuf>>,
-    ) -> Result<Self, crate::Error> {
+    pub fn load_from_bytes(bytes: &[u8], file_path: Option<PathBuf>) -> Result<Self, crate::Error> {
         let (_, mut zip) = load_zip(io::Cursor::new(bytes))?;
 
         let description = load_description(&mut zip)?;
 
-        Ok(Self { description, resources: Vec::new(), file_path: file_path.map(Into::into) })
+        Ok(Self { description, resources: Vec::new(), file_path })
     }
 
     pub fn description(&self) -> &GdtfDescription {

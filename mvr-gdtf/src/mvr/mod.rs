@@ -44,10 +44,7 @@ impl MvrFile {
         })
     }
 
-    pub fn load_from_bytes(
-        bytes: &[u8],
-        file_path: Option<impl Into<PathBuf>>,
-    ) -> Result<Self, crate::Error> {
+    pub fn load_from_bytes(bytes: &[u8], file_path: Option<PathBuf>) -> Result<Self, crate::Error> {
         let (file_hash_uuid, mut zip) = load_zip(io::Cursor::new(bytes))?;
 
         let general_scene_description = load_general_scene_description(&mut zip)?;
@@ -56,7 +53,7 @@ impl MvrFile {
             general_scene_description,
             gdtf_files: Vec::new(),
             resources: Vec::new(),
-            file_path: file_path.map(Into::into),
+            file_path,
             file_hash_uuid,
         })
     }

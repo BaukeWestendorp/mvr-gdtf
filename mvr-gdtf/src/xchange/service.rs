@@ -253,8 +253,8 @@ impl Service {
             MvrSource::Bytes { bytes, file_name } => (bytes, file_name),
         };
 
-        let file =
-            MvrFile::load_from_bytes(&bytes, file_name).map_err(|_| Error::InvalidMvrFileBytes)?;
+        let file = MvrFile::load_from_bytes(&bytes, file_name.map(Into::into))
+            .map_err(|_| Error::InvalidMvrFileBytes)?;
         let (tx, rx) = flume::bounded(1);
         self.call(ActorMessage::InsertLocalFile { file, bytes, resp: tx }, rx)?
     }
